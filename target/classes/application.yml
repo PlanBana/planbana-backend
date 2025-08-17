@@ -1,0 +1,31 @@
+server:
+  port: 8081
+
+spring:
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/planbana}
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_AUTH:false}
+          starttls:
+            enable: ${MAIL_STARTTLS:false}
+
+app:
+  frontend:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173,https://*.netlify.app}
+  jwt:
+    secret: Xjw7qT0xK8eR1MvGpA2Nz4YxU9ZqJ5rT
+    access-token-minutes: 15
+    refresh-token-days: 7
+  rateLimit:
+    requestsPerMinute: 100
