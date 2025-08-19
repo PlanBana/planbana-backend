@@ -25,7 +25,6 @@
     <bucket4j.version>8.3.0</bucket4j.version>
   </properties>
 
-  <!-- Keep Mongock modules in sync -->
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -39,7 +38,7 @@
   </dependencyManagement>
 
   <dependencies>
-    <!-- Spring core -->
+    <!-- Spring Core -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
@@ -103,7 +102,7 @@
       <version>${springdoc.version}</version>
     </dependency>
 
-    <!-- Mongock (Runner + Driver + API Annotations) -->
+    <!-- Mongock -->
     <dependency>
       <groupId>io.mongock</groupId>
       <artifactId>mongock-springboot</artifactId>
@@ -116,12 +115,6 @@
       <groupId>io.mongock</groupId>
       <artifactId>mongock-api</artifactId>
     </dependency>
-
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-
 
     <!-- Rate limiting -->
     <dependency>

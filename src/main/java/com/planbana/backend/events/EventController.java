@@ -3,17 +3,19 @@ package com.planbana.backend.events;
 import com.planbana.backend.user.User;
 import com.planbana.backend.user.UserRepository;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.geo.Point;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/events")
@@ -33,9 +35,32 @@ public class EventController {
     public String description;
     public Instant startAt;
     public Instant endAt;
+
+    /** New: cover image URL (optional) */
+    public String imageUrl;
+
+    // Legacy single-point inputs (optional)
     public Double lat;
     public Double lng;
+
+    // Start & destination points
+    public Double startLat;
+    public Double startLng;
+    public Double destinationLat;
+    public Double destinationLng;
+
+    // Classification & pricing
+    public String category;
+    public String pricingType;
+    public Double price;
+    public Integer maxParticipants;
+
     public Set<String> tags;
+  }
+
+  public static class JoinStatusResponse {
+    public String status;
+    public JoinStatusResponse(String status) { this.status = status; }
   }
 
   @PostMapping
@@ -46,9 +71,29 @@ public class EventController {
     e.setDescription(req.description);
     e.setStartAt(req.startAt);
     e.setEndAt(req.endAt);
+
+    // Cover image
+    e.setImageUrl(req.imageUrl);
+
+    // Backward-compat single location
     if (req.lng != null && req.lat != null) {
       e.setLocation(new GeoJsonPoint(req.lng, req.lat));
     }
+
+    // Start & destination
+    if (req.startLng != null && req.startLat != null) {
+      e.setStartLocation(new GeoJsonPoint(req.startLng, req.startLat));
+    }
+    if (req.destinationLng != null && req.destinationLat != null) {
+      e.setDestinationLocation(new GeoJsonPoint(req.destinationLng, req.destinationLat));
+    }
+
+    // Category & pricing
+    e.setCategory(req.category);
+    e.setPricingType(req.pricingType);
+    e.setPrice(req.price);
+    e.setMaxParticipants(req.maxParticipants);
+
     e.setTags(req.tags != null ? req.tags : Set.of());
     e.setCreatedByUserId(u.getId());
     return repo.save(e);
@@ -63,9 +108,11 @@ public class EventController {
       @RequestParam(required = false) Instant startDate,
       @RequestParam(required = false) Instant endDate,
       @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(required = false) String category
   ) {
     Query query = new Query();
+
     if (q != null && !q.isBlank()) {
       query.addCriteria(new Criteria().orOperator(
           Criteria.where("title").regex(q, "i"),
@@ -73,16 +120,31 @@ public class EventController {
           Criteria.where("tags").in(q)
       ));
     }
-    if (lat != null && lng != null) {
-      query.addCriteria(Criteria.where("location").nearSphere(new org.springframework.data.geo.Point(lng, lat))
-          .maxDistance(radiusKm / 6378.1)); // radians
+
+    if (category != null && !category.isBlank()) {
+      query.addCriteria(Criteria.where("category").is(category));
     }
+
+    // Near search around either legacy location OR startLocation
+    if (lat != null && lng != null) {
+      Criteria nearLegacy = Criteria.where("location")
+          .nearSphere(new Point(lng, lat))
+          .maxDistance(radiusKm / 6378.1); // radians
+
+      Criteria nearStart = Criteria.where("startLocation")
+          .nearSphere(new Point(lng, lat))
+          .maxDistance(radiusKm / 6378.1); // radians
+
+      query.addCriteria(new Criteria().orOperator(nearLegacy, nearStart));
+    }
+
     if (startDate != null) {
       query.addCriteria(Criteria.where("startAt").gte(startDate));
     }
     if (endDate != null) {
       query.addCriteria(Criteria.where("endAt").lte(endDate));
     }
+
     query.with(PageRequest.of(page, size));
     return mongo.find(query, Event.class);
   }
@@ -95,9 +157,32 @@ public class EventController {
   @PatchMapping("/{id}")
   public Map<String, String> update(@PathVariable String id, @RequestBody Map<String, Object> body, Authentication auth) {
     Event e = repo.findById(id).orElseThrow();
-    // Simple update (in production you would check ownership/roles)
+    // NOTE: In production, verify ownership/roles before mutation.
     if (body.containsKey("title")) e.setTitle((String) body.get("title"));
     if (body.containsKey("description")) e.setDescription((String) body.get("description"));
+    if (body.containsKey("imageUrl")) e.setImageUrl((String) body.get("imageUrl"));
+    if (body.containsKey("category")) e.setCategory((String) body.get("category"));
+    if (body.containsKey("pricingType")) e.setPricingType((String) body.get("pricingType"));
+    if (body.containsKey("price")) e.setPrice(body.get("price") == null ? null : Double.valueOf(body.get("price").toString()));
+    if (body.containsKey("maxParticipants")) e.setMaxParticipants(body.get("maxParticipants") == null ? null : Integer.valueOf(body.get("maxParticipants").toString()));
+
+    if (body.containsKey("startLocation")) {
+      Map<?,?> p = (Map<?,?>) body.get("startLocation");
+      if (p != null && p.get("lng") != null && p.get("lat") != null) {
+        double lng = Double.parseDouble(p.get("lng").toString());
+        double lat = Double.parseDouble(p.get("lat").toString());
+        e.setStartLocation(new GeoJsonPoint(lng, lat));
+      }
+    }
+    if (body.containsKey("destinationLocation")) {
+      Map<?,?> p = (Map<?,?>) body.get("destinationLocation");
+      if (p != null && p.get("lng") != null && p.get("lat") != null) {
+        double lng = Double.parseDouble(p.get("lng").toString());
+        double lat = Double.parseDouble(p.get("lat").toString());
+        e.setDestinationLocation(new GeoJsonPoint(lng, lat));
+      }
+    }
+
     repo.save(e);
     return Map.of("message", "updated");
   }
@@ -106,5 +191,203 @@ public class EventController {
   public Map<String, String> delete(@PathVariable String id) {
     repo.deleteById(id);
     return Map.of("message", "deleted");
+  }
+
+  // =============================
+  // Joining APIs (caller actions)
+  // =============================
+
+  @PostMapping("/{id}/join")
+  public JoinStatusResponse requestJoin(@PathVariable String id, Authentication auth) {
+    User u = users.findByEmail(auth.getName()).orElseThrow();
+    Event e = repo.findById(id).orElseThrow();
+
+    // Creator cannot "join" (treat as approved participant)
+    if (Objects.equals(e.getCreatedByUserId(), u.getId())) {
+      ensureParticipant(e, u.getId()); // also removes any requests
+      repo.save(e);
+      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+    }
+
+    // Already a participant
+    if (e.getParticipants().contains(u.getId())) {
+      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+    }
+
+    // Existing request?
+    Event.JoinRequest existing = findJoinRequestForUser(e, u.getId());
+    if (existing != null) {
+      return new JoinStatusResponse(existing.getStatus().name());
+    }
+
+    // Capacity check
+    boolean hasCapacity = e.getMaxParticipants() == null
+        || e.getParticipants().size() < e.getMaxParticipants();
+
+    if (hasCapacity) {
+      ensureParticipant(e, u.getId());
+      repo.save(e);
+      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+    } else {
+      Event.JoinRequest jr = new Event.JoinRequest(u.getId(), Event.JoinStatus.WAITLISTED, Instant.now());
+      e.getJoinRequests().add(jr);
+      repo.save(e);
+      return new JoinStatusResponse(Event.JoinStatus.WAITLISTED.name());
+    }
+  }
+
+  @GetMapping("/{id}/join/status")
+  public JoinStatusResponse myJoinStatus(@PathVariable String id, Authentication auth) {
+    User u = users.findByEmail(auth.getName()).orElseThrow();
+    Event e = repo.findById(id).orElseThrow();
+
+    if (e.getParticipants().contains(u.getId())) {
+      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+    }
+    Event.JoinRequest jr = findJoinRequestForUser(e, u.getId());
+    if (jr != null) {
+      return new JoinStatusResponse(jr.getStatus().name());
+    }
+    return new JoinStatusResponse(Event.JoinStatus.NONE.name());
+  }
+
+  // =======================================
+  // Host/Admin APIs (manage join requests)
+  // =======================================
+
+  @GetMapping("/{id}/join/requests")
+  public List<Event.JoinRequest> listJoinRequests(@PathVariable String id, Authentication auth) {
+    Event e = repo.findById(id).orElseThrow();
+    assertOwner(auth, e);
+    return e.getJoinRequests();
+  }
+
+  @PatchMapping("/{id}/join/{userId}")
+  public Map<String, Object> changeJoinStatus(
+      @PathVariable String id,
+      @PathVariable String userId,
+      @RequestParam String action,
+      Authentication auth
+  ) {
+    Event e = repo.findById(id).orElseThrow();
+    assertOwner(auth, e);
+
+    String act = action == null ? "" : action.trim().toLowerCase(Locale.ROOT);
+    switch (act) {
+      case "approve" -> approveUser(e, userId);
+      case "reject"  -> rejectUser(e, userId);
+      default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "action must be 'approve' or 'reject'");
+    }
+
+    repo.save(e);
+    Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
+    return Map.of(
+        "message", "updated",
+        "status", jr.getStatus().name(),
+        "participantsCount", e.getParticipants().size()
+    );
+  }
+
+  // =====================
+  // Likes APIs
+  // =====================
+
+  /** Summary: count + whether caller liked */
+  @GetMapping("/{id}/likes")
+  public Map<String, Object> getLikes(@PathVariable String id, Authentication auth) {
+    Event e = repo.findById(id).orElseThrow();
+    String me = null;
+    if (auth != null) {
+      me = users.findByEmail(auth.getName()).map(User::getId).orElse(null);
+    }
+    boolean likedByMe = (me != null) && e.getLikedByUserIds().contains(me);
+    return Map.of(
+        "count", e.getLikeCount(),
+        "likedByMe", likedByMe
+    );
+  }
+
+  /** Like (idempotent) */
+  @PostMapping("/{id}/likes")
+  public Map<String, Object> like(@PathVariable String id, Authentication auth) {
+    User u = users.findByEmail(auth.getName()).orElseThrow();
+    Event e = repo.findById(id).orElseThrow();
+    e.like(u.getId());
+    repo.save(e);
+    return Map.of(
+        "message", "liked",
+        "count", e.getLikeCount(),
+        "likedByMe", true
+    );
+  }
+
+  /** Unlike (idempotent) */
+  @DeleteMapping("/{id}/likes")
+  public Map<String, Object> unlike(@PathVariable String id, Authentication auth) {
+    User u = users.findByEmail(auth.getName()).orElseThrow();
+    Event e = repo.findById(id).orElseThrow();
+    e.unlike(u.getId());
+    repo.save(e);
+    return Map.of(
+        "message", "unliked",
+        "count", e.getLikeCount(),
+        "likedByMe", false
+    );
+  }
+
+  // --- helpers ---
+
+  private static void ensureParticipant(Event e, String userId) {
+    List<Event.JoinRequest> updated = e.getJoinRequests().stream()
+        .filter(j -> !Objects.equals(j.getUserId(), userId))
+        .collect(Collectors.toList());
+    e.setJoinRequests(updated);
+    e.getParticipants().add(userId);
+  }
+
+  private static Event.JoinRequest findJoinRequestForUser(Event e, String userId) {
+    for (Event.JoinRequest jr : e.getJoinRequests()) {
+      if (Objects.equals(jr.getUserId(), userId)) return jr;
+    }
+    return null;
+  }
+
+  private static Event.JoinRequest findOrCreateJoinRequest(Event e, String userId) {
+    Event.JoinRequest jr = findJoinRequestForUser(e, userId);
+    if (jr == null) {
+      jr = new Event.JoinRequest(userId, Event.JoinStatus.PENDING, Instant.now());
+      e.getJoinRequests().add(jr);
+    }
+    return jr;
+  }
+
+  private void assertOwner(Authentication auth, String eventOwnerId) {
+    User u = users.findByEmail(auth.getName()).orElseThrow();
+    if (!Objects.equals(eventOwnerId, u.getId())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not event owner");
+    }
+  }
+
+  private void assertOwner(Authentication auth, Event e) {
+    assertOwner(auth, e.getCreatedByUserId());
+  }
+
+  private void approveUser(Event e, String userId) {
+    boolean hasCapacity = e.getMaxParticipants() == null
+        || e.getParticipants().size() < e.getMaxParticipants();
+    if (!hasCapacity) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Event is at capacity");
+    }
+    Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
+    jr.setStatus(Event.JoinStatus.APPROVED);
+    if (jr.getRequestedAt() == null) jr.setRequestedAt(Instant.now());
+    e.getParticipants().add(userId);
+  }
+
+  private void rejectUser(Event e, String userId) {
+    Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
+    jr.setStatus(Event.JoinStatus.REJECTED);
+    if (jr.getRequestedAt() == null) jr.setRequestedAt(Instant.now());
+    e.getParticipants().remove(userId);
   }
 }

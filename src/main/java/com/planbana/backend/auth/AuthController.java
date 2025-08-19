@@ -14,10 +14,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-//import java.time.temporal.ChronoUnit;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -32,8 +30,8 @@ public class AuthController {
   private final MailService mailService;
 
   public AuthController(UserRepository users, PasswordEncoder encoder, AuthenticationManager authManager,
-                        JwtService jwt, VerificationTokenRepository verifyRepo, PasswordResetTokenRepository resetRepo,
-                        MailService mailService) {
+                        JwtService jwt, VerificationTokenRepository verifyRepo,
+                        PasswordResetTokenRepository resetRepo, MailService mailService) {
     this.users = users;
     this.encoder = encoder;
     this.authManager = authManager;
@@ -45,21 +43,45 @@ public class AuthController {
 
   @PostMapping("/register")
   public ResponseEntity<?> register(@Valid @RequestBody AuthDtos.RegisterRequest req) {
-    if (users.findByEmail(req.email).isPresent()) {
+    if (users.findByPhone(req.phone).isPresent()) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Phone already registered"));
+    }
+
+    if (req.email != null && users.findByEmail(req.email.toLowerCase()).isPresent()) {
       return ResponseEntity.badRequest().body(Map.of("error", "Email already registered"));
     }
+
     User u = new User();
-    u.setEmail(req.email.toLowerCase());
+    u.setPhone(req.phone);
     u.setPasswordHash(encoder.encode(req.password));
-    u.setDisplayName(req.displayName != null ? req.displayName : req.email.split("@")[0]);
+    u.setDisplayName(req.displayName);
+
+    // Optional fields
+    if (req.email != null) u.setEmail(req.email.toLowerCase());
+    if (req.avatarUrl != null) u.setAvatarUrl(req.avatarUrl);
+    if (req.gender != null) u.setGender(req.gender);
+    if (req.birthDate != null) u.setBirthDate(req.birthDate);
+    if (req.occupation != null) u.setOccupation(req.occupation);
+    if (req.languages != null && !req.languages.isEmpty()) u.setLanguages(req.languages);
+    else u.setLanguages(List.of("English"));
+    if (req.hobbies != null) u.setHobbies(req.hobbies);
+    if (req.latitude != null) u.setLatitude(req.latitude);
+    if (req.longitude != null) u.setLongitude(req.longitude);
+    if (req.city != null) u.setCity(req.city);
+
     u.setRoles(Set.of("USER"));
+    u.setPhoneVerified(true); // Assuming phone was verified before registration
+
     users.save(u);
 
-    String token = UUID.randomUUID().toString();
-    verifyRepo.save(new VerificationToken(u.getId(), token, Instant.now().plus(24, ChronoUnit.HOURS)));
-    mailService.sendSimple(u.getEmail(), "Verify your email", "Click to verify: /verify-email?token=" + token);
+    // Optional email verification
+    if (u.getEmail() != null) {
+      String token = UUID.randomUUID().toString();
+      verifyRepo.save(new VerificationToken(u.getId(), token, Instant.now().plus(24, ChronoUnit.HOURS)));
+      mailService.sendSimple(u.getEmail(), "Verify your email", "Click to verify: /verify-email?token=" + token);
+    }
 
-    return ResponseEntity.ok(Map.of("message", "Registered. Please verify your email."));
+    return ResponseEntity.ok(Map.of("message", "Registered successfully"));
   }
 
   @GetMapping("/verify-email")
@@ -78,15 +100,18 @@ public class AuthController {
 
   @PostMapping("/login")
   public ResponseEntity<?> login(@Valid @RequestBody AuthDtos.LoginRequest req, HttpServletResponse res) {
-    authManager.authenticate(new UsernamePasswordAuthenticationToken(req.email, req.password));
-    User u = users.findByEmail(req.email).orElseThrow();
-    String access = jwt.generateAccess(u.getEmail(), Map.of("roles", u.getRoles()));
-    String refresh = jwt.generateRefresh(u.getEmail());
+    authManager.authenticate(new UsernamePasswordAuthenticationToken(req.phone, req.password));
+    User u = users.findByPhone(req.phone).orElseThrow();
+
+    String access = jwt.generateAccess(u.getPhone(), Map.of("roles", u.getRoles()));
+    String refresh = jwt.generateRefresh(u.getPhone());
+
     Cookie cookie = new Cookie("access_token", access);
     cookie.setPath("/");
     cookie.setHttpOnly(true);
     cookie.setSecure(true);
     res.addCookie(cookie);
+
     return ResponseEntity.ok(Map.of("refreshToken", refresh));
   }
 
@@ -95,14 +120,18 @@ public class AuthController {
     if (!jwt.validateToken(req.refreshToken)) {
       return ResponseEntity.badRequest().body(Map.of("error", "Invalid refresh token"));
     }
-    String username = jwt.getUsername(req.refreshToken);
-    User u = users.findByEmail(username).orElseThrow();
-    String access = jwt.generateAccess(u.getEmail(), Map.of("roles", u.getRoles()));
+
+    String phone = jwt.getUsername(req.refreshToken);
+    User u = users.findByPhone(phone).orElseThrow();
+
+    String access = jwt.generateAccess(u.getPhone(), Map.of("roles", u.getRoles()));
+
     Cookie cookie = new Cookie("access_token", access);
     cookie.setPath("/");
     cookie.setHttpOnly(true);
     cookie.setSecure(true);
     res.addCookie(cookie);
+
     return ResponseEntity.ok(Map.of("message", "refreshed"));
   }
 
@@ -117,12 +146,14 @@ public class AuthController {
 
   @PostMapping("/request-password-reset")
   public ResponseEntity<?> requestPasswordReset(@RequestBody @Valid AuthDtos.RequestPasswordReset req) {
-    return users.findByEmail(req.email.toLowerCase()).map(u -> {
+    return users.findByPhone(req.phone).map(u -> {
       String token = UUID.randomUUID().toString();
       resetRepo.save(new PasswordResetToken(u.getId(), token, Instant.now().plus(1, ChronoUnit.HOURS)));
-      mailService.sendSimple(u.getEmail(), "Password reset", "Reset link: /reset-password?token=" + token);
-      return ResponseEntity.ok(Map.of("message", "If your email exists, a reset link has been sent."));
-    }).orElse(ResponseEntity.ok(Map.of("message", "If your email exists, a reset link has been sent.")));
+      if (u.getEmail() != null) {
+        mailService.sendSimple(u.getEmail(), "Password reset", "Reset link: /reset-password?token=" + token);
+      }
+      return ResponseEntity.ok(Map.of("message", "If your phone exists, a reset link has been sent."));
+    }).orElse(ResponseEntity.ok(Map.of("message", "If your phone exists, a reset link has been sent.")));
   }
 
   @PostMapping("/reset-password")
