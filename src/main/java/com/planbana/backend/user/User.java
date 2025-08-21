@@ -28,7 +28,7 @@ public class User extends BaseEntity {
   private List<String> languages = new ArrayList<>();
   private Set<String> hobbies = new HashSet<>();
 
-  private String gender; // "male", "female", "trans", etc.
+  private String gender;
   private LocalDate birthDate;
   private String occupation;
 
@@ -36,26 +36,22 @@ public class User extends BaseEntity {
   private Double latitude;
   private Double longitude;
 
-  // === Government ID verification status (workflow handled elsewhere) ===
+  // === Government ID verification status ===
   public enum VerificationStatus {
-    UNVERIFIED,   // default
-    PENDING,      // submitted, awaiting review
-    VERIFIED,     // approved
-    REJECTED      // rejected (e.g., mismatch/invalid)
+    UNVERIFIED,
+    PENDING,
+    VERIFIED,
+    REJECTED
   }
 
   private VerificationStatus govIdVerificationStatus = VerificationStatus.UNVERIFIED;
 
   // === Ratings ===
-  // Stores per-rater values; key = rater userId, value = 1..5
-  // NOTE: This map is not exposed via controller responses.
   private Map<String, Integer> ratingsByUserId = new HashMap<>();
-
-  // Derived aggregates for fast reads
   private long ratingCount = 0L;
   private double ratingAverage = 0.0;
 
-  // ---------- derived fields helpers ----------
+  // ---------- rating helpers ----------
   public void upsertRating(String raterUserId, int value) {
     if (raterUserId == null || raterUserId.isBlank()) return;
     if (value < 1 || value > 5) return;
@@ -68,17 +64,14 @@ public class User extends BaseEntity {
     if (raterUserId == null || raterUserId.isBlank()) return;
     Integer previous = ratingsByUserId.remove(raterUserId);
     if (previous != null) {
-      // full recompute to keep it simple & correct
       fullRecompute();
     }
   }
 
   private void recomputeRatings(Integer previous, int value) {
     if (previous == null) {
-      // new rating
       ratingCount = ratingCount + 1;
     }
-    // recompute average from map to avoid numeric drift
     fullRecompute();
   }
 
@@ -150,18 +143,15 @@ public class User extends BaseEntity {
     this.govIdVerificationStatus = govIdVerificationStatus;
   }
 
-  // Ratings (aggregates)
   public long getRatingCount() { return ratingCount; }
   public void setRatingCount(long ratingCount) { this.ratingCount = ratingCount; }
 
   public double getRatingAverage() { return ratingAverage; }
   public void setRatingAverage(double ratingAverage) { this.ratingAverage = ratingAverage; }
 
-  // For persistence; do not expose in API responses
   public Map<String, Integer> getRatingsByUserId() { return ratingsByUserId; }
   public void setRatingsByUserId(Map<String, Integer> ratingsByUserId) {
     this.ratingsByUserId = ratingsByUserId == null ? new HashMap<>() : ratingsByUserId;
-    // ensure aggregates consistent
     fullRecompute();
   }
 }

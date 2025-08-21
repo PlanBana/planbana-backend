@@ -25,30 +25,29 @@ public class AuthController {
   private final PasswordEncoder encoder;
   private final AuthenticationManager authManager;
   private final JwtService jwt;
-  private final VerificationTokenRepository verifyRepo;
   private final PasswordResetTokenRepository resetRepo;
   private final MailService mailService;
+  private final OtpService otpService;
 
   public AuthController(UserRepository users, PasswordEncoder encoder, AuthenticationManager authManager,
-                        JwtService jwt, VerificationTokenRepository verifyRepo,
-                        PasswordResetTokenRepository resetRepo, MailService mailService) {
+                        JwtService jwt, PasswordResetTokenRepository resetRepo,
+                        MailService mailService, OtpService otpService) {
     this.users = users;
     this.encoder = encoder;
     this.authManager = authManager;
     this.jwt = jwt;
-    this.verifyRepo = verifyRepo;
     this.resetRepo = resetRepo;
     this.mailService = mailService;
+    this.otpService = otpService;
   }
 
+  // ---------------------------
+  // Registration (email optional; not stored unless OAuth later)
+  // ---------------------------
   @PostMapping("/register")
   public ResponseEntity<?> register(@Valid @RequestBody AuthDtos.RegisterRequest req) {
     if (users.findByPhone(req.phone).isPresent()) {
       return ResponseEntity.badRequest().body(Map.of("error", "Phone already registered"));
-    }
-
-    if (req.email != null && users.findByEmail(req.email.toLowerCase()).isPresent()) {
-      return ResponseEntity.badRequest().body(Map.of("error", "Email already registered"));
     }
 
     User u = new User();
@@ -56,8 +55,7 @@ public class AuthController {
     u.setPasswordHash(encoder.encode(req.password));
     u.setDisplayName(req.displayName);
 
-    // Optional fields
-    if (req.email != null) u.setEmail(req.email.toLowerCase());
+    // Optional profile fields (email intentionally NOT set here; only via OAuth flow)
     if (req.avatarUrl != null) u.setAvatarUrl(req.avatarUrl);
     if (req.gender != null) u.setGender(req.gender);
     if (req.birthDate != null) u.setBirthDate(req.birthDate);
@@ -70,37 +68,80 @@ public class AuthController {
     if (req.city != null) u.setCity(req.city);
 
     u.setRoles(Set.of("USER"));
-    u.setPhoneVerified(true); // Assuming phone was verified before registration
+    u.setPhoneVerified(false); // initial: not verified until OTP
 
     users.save(u);
 
-    // Optional email verification
-    if (u.getEmail() != null) {
-      String token = UUID.randomUUID().toString();
-      verifyRepo.save(new VerificationToken(u.getId(), token, Instant.now().plus(24, ChronoUnit.HOURS)));
-      mailService.sendSimple(u.getEmail(), "Verify your email", "Click to verify: /verify-email?token=" + token);
+    // Send account verification OTP (separate from 2FA at login; same service)
+    String otp = otpService.generateOtp(req.phone);
+    System.out.println("REGISTER OTP for " + req.phone + ": " + otp);
+
+    return ResponseEntity.ok(Map.of("message", "Registered. Please verify your phone via OTP."));
+  }
+
+  // ---------------------------
+  // Account phone verification (one-time)
+  // ---------------------------
+  @PostMapping("/request-otp")
+  public ResponseEntity<?> requestOtp(@RequestBody Map<String, String> payload) {
+    String phone = payload.get("phone");
+    Optional<User> userOpt = users.findByPhone(phone);
+    if (userOpt.isEmpty()) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Phone not registered"));
+    }
+    String otp = otpService.generateOtp(phone);
+    System.out.println("ACCOUNT VERIFY OTP for " + phone + ": " + otp);
+    return ResponseEntity.ok(Map.of("message", "OTP sent"));
+  }
+
+  @PostMapping("/verify-otp")
+  public ResponseEntity<?> verifyOtp(@RequestBody Map<String, String> payload) {
+    String phone = payload.get("phone");
+    String otp = payload.get("otp");
+
+    if (!otpService.verifyOtp(phone, otp)) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Invalid or expired OTP"));
     }
 
-    return ResponseEntity.ok(Map.of("message", "Registered successfully"));
+    User user = users.findByPhone(phone).orElseThrow();
+    user.setPhoneVerified(true);
+    users.save(user);
+
+    return ResponseEntity.ok(Map.of("message", "Phone verified"));
   }
 
-  @GetMapping("/verify-email")
-  public ResponseEntity<?> verifyEmail(@RequestParam String token) {
-    return verifyRepo.findByToken(token).map(v -> {
-      if (v.getExpiresAt().isBefore(Instant.now())) {
-        return ResponseEntity.badRequest().body(Map.of("error", "Token expired"));
-      }
-      User u = users.findById(v.getUserId()).orElseThrow();
-      u.setEmailVerified(true);
-      users.save(u);
-      verifyRepo.delete(v);
-      return ResponseEntity.ok(Map.of("message", "Email verified."));
-    }).orElse(ResponseEntity.badRequest().body(Map.of("error", "Invalid token")));
-  }
-
+  // ---------------------------
+  // LOGIN (Step 1: password check -> send 2FA OTP; no tokens yet)
+  // ---------------------------
   @PostMapping("/login")
-  public ResponseEntity<?> login(@Valid @RequestBody AuthDtos.LoginRequest req, HttpServletResponse res) {
+  public ResponseEntity<?> login(@Valid @RequestBody AuthDtos.LoginRequest req) {
+    // 1) Password authentication
     authManager.authenticate(new UsernamePasswordAuthenticationToken(req.phone, req.password));
+
+    // 2) Optional gate: require account to be phone-verified first
+    User u = users.findByPhone(req.phone).orElseThrow();
+    if (!u.isPhoneVerified()) {
+      // You can force account verification before permitting login 2FA
+      return ResponseEntity.status(403).body(Map.of("error", "Phone not verified. Please verify your account first."));
+    }
+
+    // 3) Generate 2FA OTP for login
+    String otp = otpService.generateOtp(req.phone);
+    System.out.println("LOGIN 2FA OTP for " + req.phone + ": " + otp);
+
+    // 4) Tell client to call /login-verify-otp
+    return ResponseEntity.ok(Map.of("message", "OTP sent for 2FA. Verify to complete login."));
+  }
+
+  // ---------------------------
+  // LOGIN (Step 2: verify 2FA OTP -> issue tokens)
+  // ---------------------------
+  @PostMapping("/login-verify-otp")
+  public ResponseEntity<?> loginVerifyOtp(@RequestBody AuthDtos.LoginVerifyOtp req, HttpServletResponse res) {
+    if (!otpService.verifyOtp(req.phone, req.otp)) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Invalid or expired OTP"));
+    }
+
     User u = users.findByPhone(req.phone).orElseThrow();
 
     String access = jwt.generateAccess(u.getPhone(), Map.of("roles", u.getRoles()));
@@ -115,6 +156,9 @@ public class AuthController {
     return ResponseEntity.ok(Map.of("refreshToken", refresh));
   }
 
+  // ---------------------------
+  // Token refresh / logout
+  // ---------------------------
   @PostMapping("/refresh")
   public ResponseEntity<?> refresh(@RequestBody AuthDtos.RefreshRequest req, HttpServletResponse res) {
     if (!jwt.validateToken(req.refreshToken)) {
@@ -144,6 +188,9 @@ public class AuthController {
     return ResponseEntity.ok(Map.of("message", "logged out"));
   }
 
+  // ---------------------------
+  // Password reset (still by phone; email used only if present from OAuth)
+  // ---------------------------
   @PostMapping("/request-password-reset")
   public ResponseEntity<?> requestPasswordReset(@RequestBody @Valid AuthDtos.RequestPasswordReset req) {
     return users.findByPhone(req.phone).map(u -> {

@@ -29,3 +29,4 @@ app:
     refresh-token-days: 7
   rateLimit:
     requestsPerMinute: 100
+  bootstrap-admin-phone: "1234567890"

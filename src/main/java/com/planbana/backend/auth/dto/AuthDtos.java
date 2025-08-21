@@ -16,7 +16,7 @@ public class AuthDtos {
     @NotBlank public String password;
 
     @NotBlank public String displayName;
-    public String email;
+
     public String avatarUrl;
     public String gender;
     public LocalDate birthDate;
@@ -34,6 +34,16 @@ public class AuthDtos {
     public String phone;
 
     @NotBlank public String password;
+  }
+
+  public static class LoginVerifyOtp {
+    @NotBlank
+    @Pattern(regexp = "^[0-9]{8,15}$", message = "Phone number must be 8 to 15 digits")
+    public String phone;
+
+    @NotBlank
+    @Pattern(regexp = "^[0-9]{4,8}$", message = "OTP must be 4 to 8 digits")
+    public String otp;
   }
 
   public static class RefreshRequest {

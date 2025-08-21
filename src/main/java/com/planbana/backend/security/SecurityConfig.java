@@ -32,13 +32,17 @@ public class SecurityConfig {
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
       .csrf(AbstractHttpConfigurer::disable)
+      .cors(Customizer.withDefaults())
       .authorizeHttpRequests(auth -> auth
-          .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
-          .requestMatchers("/api/auth/**").permitAll()
-          .requestMatchers(HttpMethod.GET, "/api/destinations/**", "/api/events/**").permitAll()
-          .anyRequest().authenticated()
+        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
+        .requestMatchers("/api/auth/**").permitAll()
+        .requestMatchers(HttpMethod.GET, "/api/destinations/**", "/api/events/**").permitAll()
+        // everything else needs authentication
+        .anyRequest().authenticated()
       )
       .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
     return http.build();
   }
 
@@ -50,8 +54,8 @@ public class SecurityConfig {
   @Bean
   public AuthenticationManager authenticationManager() {
     DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-    provider.setPasswordEncoder(passwordEncoder());
     provider.setUserDetailsService(userDetailsService);
+    provider.setPasswordEncoder(passwordEncoder());
     return new ProviderManager(provider);
   }
 }

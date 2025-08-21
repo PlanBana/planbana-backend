@@ -6,6 +6,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -28,14 +29,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   }
 
   @Override
-  protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+  protected boolean shouldNotFilter(HttpServletRequest request) {
+    if (HttpMethod.OPTIONS.matches(request.getMethod())) return true;
+    String path = request.getRequestURI();
+    return path.startsWith("/api/auth");
+  }
+
+  @Override
+  protected void doFilterInternal(HttpServletRequest request,
+                                  HttpServletResponse response,
+                                  FilterChain filterChain) throws ServletException, IOException {
+
     String token = resolveToken(request);
+
     if (token != null && jwtService.validateToken(token)) {
       String username = jwtService.getUsername(token);
-      UserDetails details = userDetailsService.loadUserByUsername(username);
-      UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
-      SecurityContextHolder.getContext().setAuthentication(auth);
+      if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+        UserDetails details = userDetailsService.loadUserByUsername(username);
+        UsernamePasswordAuthenticationToken auth =
+            new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(auth);
+      }
     }
+
     filterChain.doFilter(request, response);
   }
 
@@ -47,7 +63,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (request.getCookies() != null) {
       return Arrays.stream(request.getCookies())
           .filter(c -> "access_token".equals(c.getName()))
-          .map(Cookie::getValue).findFirst().orElse(null);
+          .map(Cookie::getValue)
+          .findFirst()
+          .orElse(null);
     }
     return null;
   }
