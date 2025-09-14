@@ -2,7 +2,6 @@ package com.planbana.backend.user;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -31,7 +30,7 @@ public class UserController {
   }
 
   public static class UpdateMe {
-    @Size(max=140) public String bio;
+    public String name;
     public String displayName;
     public String avatarUrl;
     public String city;
@@ -53,7 +52,7 @@ public class UserController {
                  .or(() -> repo.findByEmail(auth.getName()))
                  .orElseThrow();
 
-    if (req.bio != null) u.setBio(req.bio);
+    if (req.name != null) u.setName(req.name);
     if (req.displayName != null) u.setDisplayName(req.displayName);
     if (req.avatarUrl != null) u.setAvatarUrl(req.avatarUrl);
     if (req.city != null) u.setCity(req.city);

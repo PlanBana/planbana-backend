@@ -17,8 +17,13 @@ public class User extends BaseEntity {
   private String phone;
 
   private String passwordHash;
+
+  // NEW: canonical full name
+  private String name;
+
+  // Optional display/handle shown in UI
   private String displayName;
-  private String bio;
+
   private String avatarUrl;
 
   private boolean emailVerified = false;
@@ -96,11 +101,11 @@ public class User extends BaseEntity {
   public String getPasswordHash() { return passwordHash; }
   public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
 
+  public String getName() { return name; }
+  public void setName(String name) { this.name = name; }
+
   public String getDisplayName() { return displayName; }
   public void setDisplayName(String displayName) { this.displayName = displayName; }
-
-  public String getBio() { return bio; }
-  public void setBio(String bio) { this.bio = bio; }
 
   public String getAvatarUrl() { return avatarUrl; }
   public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
