@@ -21,7 +21,6 @@ public class BackendApplication {
       System.err.println("[dotenv] Failed to load .env: " + e.getMessage());
       // Optionally log e.printStackTrace();
     }
-
     SpringApplication.run(BackendApplication.class, args);
   }
 
