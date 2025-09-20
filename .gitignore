@@ -3,3 +3,7 @@ target/
 
 # local env
 .env
+
+# Firebase service account
+src/main/resources/firebase-service-account.json
+*.json

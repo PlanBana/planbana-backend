@@ -18,6 +18,10 @@ public class User extends BaseEntity {
 
   private String passwordHash;
 
+  // ✅ Store Firebase UID
+  @Indexed(unique = true)
+  private String firebaseUid;
+
   // NEW: canonical full name
   private String name;
 
@@ -100,6 +104,9 @@ public class User extends BaseEntity {
 
   public String getPasswordHash() { return passwordHash; }
   public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+
+  public String getFirebaseUid() { return firebaseUid; }
+  public void setFirebaseUid(String firebaseUid) { this.firebaseUid = firebaseUid; }
 
   public String getName() { return name; }
   public void setName(String name) { this.name = name; }

@@ -10,6 +10,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -36,16 +37,18 @@ public class SecurityConfig {
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
-      .csrf(AbstractHttpConfigurer::disable)
-      .cors(Customizer.withDefaults())
-      .authorizeHttpRequests(auth -> auth
-        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
-        .requestMatchers("/api/auth/**").permitAll() // includes /register-minimal and OTP
-        .requestMatchers(HttpMethod.GET, "/api/destinations/**", "/api/events/**").permitAll()
-        .anyRequest().authenticated()
-      )
-      .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+  .csrf(AbstractHttpConfigurer::disable)
+  .cors(Customizer.withDefaults())
+  .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // 👈 add this
+  .authorizeHttpRequests(auth -> auth
+      .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+      .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
+      .requestMatchers("/api/auth/**").permitAll()
+      .requestMatchers(HttpMethod.GET, "/api/destinations/**", "/api/events/**").permitAll()
+      .anyRequest().authenticated()
+  )
+  .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
 
     return http.build();
   }
@@ -67,7 +70,10 @@ public class SecurityConfig {
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://10.0.2.2:3000",
+        "http://10.0.2.2:5173",
+         "http://10.0.2.2:8085"
     ));
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("*"));
