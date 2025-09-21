@@ -8,33 +8,30 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtService jwtService;
-  private final UserDetailsService userDetailsService;
 
-  public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
+  public JwtAuthenticationFilter(JwtService jwtService) {
     this.jwtService = jwtService;
-    this.userDetailsService = userDetailsService;
   }
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
     if (HttpMethod.OPTIONS.matches(request.getMethod())) return true;
-    final String path = request.getServletPath();
-    if (path.startsWith("/api/auth")) return true; // public auth endpoints
-    return false;
+    String path = request.getServletPath();
+    return path.startsWith("/api/auth");
   }
 
   @Override
@@ -46,11 +43,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     if (token != null && jwtService.validateToken(token)) {
       String username = jwtService.getUsername(token);
+      List<String> roles = jwtService.getRoles(token);
+
       if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-        UserDetails details = userDetailsService.loadUserByUsername(username);
-        UsernamePasswordAuthenticationToken auth =
-            new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
-        SecurityContextHolder.getContext().setAuthentication(auth);
+        // Ensure roles are Spring-friendly ("ROLE_USER" instead of "USER")
+        List<SimpleGrantedAuthority> authorities = roles.stream()
+            .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+            .map(SimpleGrantedAuthority::new)
+            .toList();
+
+        UsernamePasswordAuthenticationToken authToken =
+            new UsernamePasswordAuthenticationToken(
+                username, // principal
+                null,
+                authorities
+            );
+
+        SecurityContextHolder.getContext().setAuthentication(authToken);
+
+        System.out.println("✅ Authenticated " + username + " with roles " + authorities);
       }
     }
 

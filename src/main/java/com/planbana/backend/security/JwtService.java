@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 import java.security.Key;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class JwtService {
@@ -24,22 +26,26 @@ public class JwtService {
       @Value("${app.jwt.secret}") String secret,
       @Value("${app.jwt.access-token-minutes}") long accessMinutes,
       @Value("${app.jwt.refresh-token-days}") long refreshDays) {
-    this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(java.util.Base64.getEncoder().encodeToString(secret.getBytes())));
+    this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
     this.accessMinutes = accessMinutes;
     this.refreshDays = refreshDays;
   }
 
-  public String generateAccess(String subject, Map<String, Object> claims) {
-    Instant now = Instant.now();
-    Instant exp = now.plusSeconds(accessMinutes * 60);
-    return Jwts.builder()
-        .setSubject(subject)
-        .setIssuedAt(Date.from(now))
-        .setExpiration(Date.from(exp))
-        .addClaims(claims)
-        .signWith(key, SignatureAlgorithm.HS256)
-        .compact();
+  public String generateAccess(String subject, Set<String> roles) {
+    return generateAccess(subject, Map.of("roles", List.copyOf(roles)));
   }
+
+  public String generateAccess(String subject, Map<String, Object> claims) {
+  Instant now = Instant.now();
+  Instant exp = now.plusSeconds(accessMinutes * 60);
+  return Jwts.builder()
+      .setSubject(subject)
+      .setIssuedAt(Date.from(now))
+      .setExpiration(Date.from(exp))
+      .addClaims(claims)
+      .signWith(key, SignatureAlgorithm.HS256)
+      .compact();
+}
 
   public String generateRefresh(String subject) {
     Instant now = Instant.now();
@@ -62,7 +68,25 @@ public class JwtService {
   }
 
   public String getUsername(String token) {
-    Claims claims = Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+    Claims claims = Jwts.parserBuilder()
+        .setSigningKey(key)
+        .build()
+        .parseClaimsJws(token)
+        .getBody();
     return claims.getSubject();
+  }
+
+  @SuppressWarnings("unchecked")
+  public List<String> getRoles(String token) {
+    Claims claims = Jwts.parserBuilder()
+        .setSigningKey(key)
+        .build()
+        .parseClaimsJws(token)
+        .getBody();
+    Object roles = claims.get("roles");
+    if (roles instanceof List<?> list) {
+      return list.stream().map(Object::toString).toList();
+    }
+    return List.of();
   }
 }

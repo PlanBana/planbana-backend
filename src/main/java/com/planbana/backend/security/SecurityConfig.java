@@ -37,23 +37,29 @@ public class SecurityConfig {
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
-  .csrf(AbstractHttpConfigurer::disable)
-  .cors(Customizer.withDefaults())
-  .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // 👈 add this
-  .authorizeHttpRequests(auth -> auth
-      .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-      .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
-      .requestMatchers("/api/auth/**").permitAll()
-      .requestMatchers(HttpMethod.GET, "/api/destinations/**", "/api/events/**").permitAll()
-      .anyRequest().authenticated()
-  )
-  .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        .csrf(AbstractHttpConfigurer::disable)
+        .cors(Customizer.withDefaults())
+        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+            .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
+            .requestMatchers("/api/auth/**").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/destinations/**", "/api/events/**").permitAll()
 
+            // ✅ Require USER role for /api/users/**
+            .requestMatchers("/api/users/**").hasRole("USER")
+
+            .anyRequest().authenticated()
+        )
+        .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
     return http.build();
   }
 
-  @Bean public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
+  @Bean
+  public PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+  }
 
   @Bean
   public AuthenticationManager authenticationManager() {
@@ -72,8 +78,7 @@ public class SecurityConfig {
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://10.0.2.2:3000",
-        "http://10.0.2.2:5173",
-         "http://10.0.2.2:8085"
+        "http://10.0.2.2:5173"
     ));
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("*"));
