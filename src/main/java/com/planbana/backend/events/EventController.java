@@ -1,9 +1,13 @@
 package com.planbana.backend.events;
 
+import com.planbana.backend.events.audit.AuditLog;
+import com.planbana.backend.events.audit.AuditLogRepository;
 import com.planbana.backend.user.User;
 import com.planbana.backend.user.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.geo.Point;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -23,6 +27,11 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/events")
 public class EventController {
+
+  @Autowired
+  private AuditLogRepository auditLogRepo;
+
+  @Autowired
   private final EventRepository repo;
   private final MongoTemplate mongo;
   private final UserRepository users;
@@ -157,60 +166,128 @@ public class EventController {
   public Map<String, String> update(@PathVariable String id, @RequestBody Map<String, Object> body,
       Authentication auth) {
     Event e = repo.findById(id).orElseThrow();
+    User currentUser = getCurrentUser(auth);
     assertOwner(auth, e);
-    if (body.containsKey("title"))
+
+    boolean updated = false;
+    if (body.containsKey("title")) {
       e.setTitle((String) body.get("title"));
-    if (body.containsKey("description"))
+      updated = true;
+    }
+    if (body.containsKey("description")) {
       e.setDescription((String) body.get("description"));
-    if (body.containsKey("imageUrl"))
+      updated = true;
+    }
+    if (body.containsKey("imageUrl")) {
       e.setImageUrl((String) body.get("imageUrl"));
-    if (body.containsKey("category"))
+      updated = true;
+    }
+    if (body.containsKey("category")) {
       e.setCategory((String) body.get("category"));
-    if (body.containsKey("pricingType"))
+      updated = true;
+    }
+    if (body.containsKey("pricingType")) {
       e.setPricingType((String) body.get("pricingType"));
-    if (body.containsKey("price"))
+      updated = true;
+    }
+    if (body.containsKey("price")) {
       e.setPrice((String) body.get("price"));
-    if (body.containsKey("maxParticipants"))
+      updated = true;
+    }
+    if (body.containsKey("maxParticipants")) {
       e.setMaxParticipants(Integer.parseInt(body.get("maxParticipants").toString()));
-    if (body.containsKey("requirements"))
+      updated = true;
+    }
+    if (body.containsKey("requirements")) {
       e.setRequirements((String) body.get("requirements"));
-    if (body.containsKey("additionalGuidelines"))
+      updated = true;
+    }
+    if (body.containsKey("additionalGuidelines")) {
       e.setAdditionalGuidelines((String) body.get("additionalGuidelines"));
+      updated = true;
+    }
+
     repo.save(e);
+
+    if (updated) {
+      auditLogRepo.save(new AuditLog(
+          e.getId(),
+          "event_updated",
+          currentUser.getId(),
+          null,
+          Instant.now()));
+    }
+
     return Map.of("message", "updated");
   }
 
   @DeleteMapping("/{id}")
   public Map<String, String> delete(@PathVariable String id, Authentication auth) {
-    Event e = repo.findById(id).orElseThrow();
-    assertOwner(auth, e);
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
+    User currentUser = getCurrentUser(auth);
+
+    // 🚫 Only allow the actual host to delete
+    if (!e.isHost(currentUser.getId())) {
+      logger.warn("Unauthorized delete attempt by user {} on event {}", currentUser.getId(), id);
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host can delete this event");
+    }
+
     repo.delete(e);
     return Map.of("message", "deleted");
   }
 
-  @DeleteMapping("/{id}/cancel")
-  public Map<String, String> cancelEvent(@PathVariable String id, Authentication auth) {
-    Event event = repo.findById(id).orElseThrow();
+  @PatchMapping("/{id}/status") // Cancel or Restore Event API
+  public Map<String, String> updateEventStatus(
+      @PathVariable String id,
+      @RequestParam String action,
+      Authentication auth) {
+
+    Event event = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
     User currentUser = getCurrentUser(auth);
 
-    boolean isHost = event.isHost(currentUser.getId());
-    boolean isCoHost = event.isCoHost(currentUser.getId());
-
-    if (!isHost && !isCoHost) {
-      logger.warn("Unauthorized cancel attempt by user {} on event {}", currentUser.getId(), id);
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host or co-host can cancel the event");
+    // 🔒 Only host can cancel or restore
+    if (!event.isHost(currentUser.getId())) {
+      logger.warn("Unauthorized status update by user {} on event {}", currentUser.getId(), id);
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the host can modify event status");
     }
 
-    if (event.isCanceled()) {
-      return Map.of("message", "Event is already canceled");
+    switch (action.toLowerCase()) {
+      case "cancel":
+        if (event.isCanceled()) {
+          return Map.of("message", "Event is already canceled");
+        }
+        event.setCanceled(true);
+        auditLogRepo.save(new AuditLog(
+            event.getId(), "event_canceled", currentUser.getId(), null));
+        break;
+
+      case "restore":
+        if (!event.isCanceled()) {
+          return Map.of("message", "Event is not canceled");
+        }
+        event.setCanceled(false);
+        auditLogRepo.save(new AuditLog(
+            event.getId(), "event_restored", currentUser.getId(), null));
+        break;
+
+      default:
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Invalid action. Use 'cancel' or 'restore'");
     }
 
-    event.setCanceled(true);
     repo.save(event);
-
-    logger.info("Event {} canceled by user {}", id, currentUser.getId());
-    return Map.of("message", "Event canceled successfully");
+    return Map.of("message", "Event status updated to " + action);
   }
+
+  // @GetMapping("/canceledInPast")
+  // public List<Event> getMyCanceledEvents(Authentication auth) {
+  // User currentUser = getCurrentUser(auth);
+  // return repo.findByCreatedByUserIdAndCanceledTrue(currentUser.getId());
+  // }
 
   @PostMapping("/{id}/join")
   public JoinStatusResponse requestJoin(@PathVariable String id, Authentication auth) {
@@ -286,19 +363,43 @@ public class EventController {
     return Map.of("message", "You have left the event");
   }
 
-  @GetMapping("/{id}/join/status")
-  public JoinStatusResponse myJoinStatus(@PathVariable String id, Authentication auth) {
-    User u = getCurrentUser(auth);
-    Event e = repo.findById(id).orElseThrow();
+  @GetMapping("/joined/statuses")
+  public List<JoinStatusOverview> getMyJoinedEventsStatus(Authentication auth) {
+    User user = getCurrentUser(auth);
+    List<Event> allEvents = repo.findAll();
 
-    if (e.getParticipants().contains(u.getId())) {
-      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+    List<JoinStatusOverview> result = new ArrayList<>();
+
+    for (Event e : allEvents) {
+      String status = null;
+
+      if (e.getParticipants().contains(user.getId())) {
+        status = Event.JoinStatus.APPROVED.name();
+      } else {
+        Event.JoinRequest jr = e.getJoinRequests().stream()
+            .filter(req -> req.getUserId().equals(user.getId()))
+            .findFirst()
+            .orElse(null);
+
+        if (jr == null)
+          continue; // Skip if no join request or participation
+        status = jr.getStatus().name();
+      }
+
+      JoinStatusOverview overview = new JoinStatusOverview();
+      overview.setEventId(e.getId());
+      overview.setEventTitle(e.getTitle());
+      overview.setStatus(status);
+      overview.setRedirectToEventPage("/events/" + e.getId());
+
+      if (Event.JoinStatus.APPROVED.name().equals(status)) {
+        overview.setConversationLink("/chat/" + e.getId()); // or actual group URL
+      }
+
+      result.add(overview);
     }
-    Event.JoinRequest jr = findJoinRequestForUser(e, u.getId());
-    if (jr != null) {
-      return new JoinStatusResponse(jr.getStatus().name());
-    }
-    return new JoinStatusResponse(Event.JoinStatus.NONE.name());
+
+    return result;
   }
 
   @GetMapping("/{id}/join/requests")
@@ -316,6 +417,7 @@ public class EventController {
       Authentication auth) {
 
     Event e = repo.findById(id).orElseThrow();
+    User currentUser = getCurrentUser(auth);
     assertOwner(auth, e);
 
     String act = (action == null ? "" : action.trim().toLowerCase(Locale.ROOT));
@@ -341,9 +443,16 @@ public class EventController {
     } else if (newStatus == Event.JoinStatus.WAITLISTED) {
       e.getParticipantsWaitingList().add(userId);
     }
-    // else: REJECTED or NONE → removed already above
 
     repo.save(e);
+
+    auditLogRepo.save(new AuditLog(
+        e.getId(),
+        "join_status_" + (newStatus != null ? newStatus.name().toLowerCase() : "cleared"),
+        currentUser.getId(),
+        userId,
+        Instant.now()));
+
     return Map.of(
         "message", "updated",
         "status", newStatus != null ? newStatus.name() : "NONE",
@@ -353,31 +462,90 @@ public class EventController {
 
   @GetMapping("/{id}/likes")
   public Map<String, Object> getLikes(@PathVariable String id, Authentication auth) {
-    Event e = repo.findById(id).orElseThrow();
-    String me = null;
-    if (auth != null) {
-      me = users.findByPhone(auth.getName()).map(User::getId).orElse(null);
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
+    if (auth == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
     }
-    boolean likedByMe = (me != null) && e.getLikedByUserIds().contains(me);
-    return Map.of("count", e.getLikeCount(), "likedByMe", likedByMe);
+
+    User currentUser = getCurrentUser(auth);
+
+    // ✅ Allow only host to view total likes
+    if (!e.isHost(currentUser.getId())) {
+      logger.warn("Unauthorized attempt to view likes by user {} on event {}", currentUser.getId(), id);
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host can view likes");
+    }
+
+    boolean likedByMe = e.getLikedByUserIds().contains(currentUser.getId());
+    return Map.of(
+        "count", e.getLikeCount(),
+        "likedByMe", likedByMe);
+  }
+
+  @GetMapping("/liked")
+  public List<Event> getLikedEventsForUser(Authentication auth) {
+    User user = getCurrentUser(auth);
+
+    List<Event> allEvents = repo.findAll(); // or optimize with custom query if needed
+    return allEvents.stream()
+        .filter(e -> !e.isCanceled())
+        .filter(e -> e.getLikedByUserIds().contains(user.getId()))
+        .collect(Collectors.toList());
   }
 
   @PostMapping("/{id}/likes")
   public Map<String, Object> like(@PathVariable String id, Authentication auth) {
-    User u = getCurrentUser(auth);
-    Event e = repo.findById(id).orElseThrow();
-    e.like(u.getId());
-    repo.save(e);
-    return Map.of("message", "liked", "count", e.getLikeCount(), "likedByMe", true);
+    User user = getCurrentUser(auth);
+    Event event = repo.findById(id).orElseThrow();
+
+    boolean added = event.like(user.getId());
+    if (added) {
+      auditLogRepo.save(new AuditLog(
+          event.getId(),
+          "event_liked",
+          user.getId(),
+          null,
+          Instant.now()));
+    }
+
+    repo.save(event);
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("message", "liked");
+    response.put("likedByMe", true);
+    if (event.isHost(user.getId())) {
+      response.put("count", event.getLikeCount());
+    }
+
+    return response;
   }
 
   @DeleteMapping("/{id}/likes")
   public Map<String, Object> unlike(@PathVariable String id, Authentication auth) {
-    User u = getCurrentUser(auth);
-    Event e = repo.findById(id).orElseThrow();
-    e.unlike(u.getId());
-    repo.save(e);
-    return Map.of("message", "unliked", "count", e.getLikeCount(), "likedByMe", false);
+    User user = getCurrentUser(auth);
+    Event event = repo.findById(id).orElseThrow();
+
+    boolean removed = event.unlike(user.getId());
+    if (removed) {
+      auditLogRepo.save(new AuditLog(
+          event.getId(),
+          "event_unliked",
+          user.getId(),
+          null,
+          Instant.now()));
+    }
+
+    repo.save(event);
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("message", "unliked");
+    response.put("likedByMe", false);
+    if (event.isHost(user.getId())) {
+      response.put("count", event.getLikeCount());
+    }
+
+    return response;
   }
 
   @PostMapping("/{id}/cohosts/{userId}")
@@ -386,13 +554,11 @@ public class EventController {
     Event e = repo.findById(id).orElseThrow();
     User currentUser = getCurrentUser(auth);
 
-    // ❗ Only host can add/remove co-hosts
     if (!e.isHost(currentUser.getId())) {
       logger.warn("Unauthorized co-host modification by non-host: {}", currentUser.getId());
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host can manage co-hosts");
     }
 
-    // ✅ Add only if user is APPROVED participant
     if ("add".equalsIgnoreCase(action)) {
       if (!e.getParticipants().contains(userId)) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -400,16 +566,35 @@ public class EventController {
       }
       boolean added = e.getCoHostUserIds().add(userId);
       repo.save(e);
+
+      if (added) {
+        auditLogRepo.save(new AuditLog(
+            e.getId(),
+            "cohost_added",
+            currentUser.getId(),
+            userId,
+            Instant.now()));
+      }
+
       return Map.of("message", added ? "co-host added" : "already a co-host");
     }
 
-    // ✅ Remove only if target is not the host (prevent accidental deletion)
     else if ("remove".equalsIgnoreCase(action)) {
       if (e.isHost(userId)) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Host cannot be removed");
       }
       boolean removed = e.getCoHostUserIds().remove(userId);
       repo.save(e);
+
+      if (removed) {
+        auditLogRepo.save(new AuditLog(
+            e.getId(),
+            "cohost_removed",
+            currentUser.getId(),
+            userId,
+            Instant.now()));
+      }
+
       return Map.of("message", removed ? "co-host removed" : "user was not a co-host");
     }
 
@@ -428,13 +613,11 @@ public class EventController {
     boolean isHost = event.isHost(currentUser.getId());
     boolean isCoHost = event.isCoHost(currentUser.getId());
 
-    // Permission check
     if (!isHost && !isCoHost) {
       logger.warn("Unauthorized removal attempt by {} on event {}", currentUser.getId(), event.getId());
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only host or co-host can remove participants");
     }
 
-    // Co-hosts can't remove host or other co-hosts
     if (isCoHost) {
       if (event.isHost(userId)) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Co-host cannot remove host");
@@ -446,23 +629,19 @@ public class EventController {
 
     boolean changed = false;
 
-    // Remove from participants
     if (event.getParticipants().remove(userId)) {
       changed = true;
     }
 
-    // Remove from co-hosts (only if host)
     if (isHost && event.getCoHostUserIds().remove(userId)) {
       changed = true;
     }
 
-    // Remove from waiting list
     if (event.getParticipantsWaitingList() != null &&
         event.getParticipantsWaitingList().remove(userId)) {
       changed = true;
     }
 
-    // Remove join request
     List<Event.JoinRequest> updated = event.getJoinRequests()
         .stream()
         .filter(jr -> !userId.equals(jr.getUserId()))
@@ -474,6 +653,12 @@ public class EventController {
 
     if (changed) {
       repo.save(event);
+      auditLogRepo.save(new AuditLog(
+          event.getId(),
+          "participant_removed",
+          currentUser.getId(),
+          userId,
+          Instant.now()));
     }
 
     return Map.of("message", "Participant removed");
@@ -495,6 +680,84 @@ public class EventController {
     String shareUrl = frontendBaseUrl + e.getId();
 
     return Map.of("shareUrl", shareUrl);
+  }
+
+  @GetMapping("/{id}/statistics")
+  public Map<String, Object> getEventStats(@PathVariable String id, Authentication auth) {
+    User currentUser = getCurrentUser(auth);
+    Event event = repo.findById(id).orElseThrow();
+
+    // ❗ Host-only access
+    if (!event.isHost(currentUser.getId())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host can access statistics.");
+    }
+
+    int participantsCount = event.getParticipants().size();
+    int waitingListCount = event.getParticipantsWaitingList().size();
+    long likesCount = event.getLikeCount();
+
+    int pendingJoinRequests = (int) event.getJoinRequests().stream()
+        .filter(req -> !event.getParticipants().contains(req.getUserId()))
+        .filter(req -> !event.getParticipantsWaitingList().contains(req.getUserId()))
+        .count();
+
+    return Map.of(
+        "participants", participantsCount,
+        "waitingList", waitingListCount,
+        "likes", likesCount,
+        "joinRequests", pendingJoinRequests);
+  }
+
+  @GetMapping("/{id}/audit-logs")
+  public List<AuditLog> getAuditLogs(@PathVariable String id, Authentication auth) {
+    User currentUser = getCurrentUser(auth);
+    Event event = repo.findById(id).orElseThrow();
+
+    if (!event.isHost(currentUser.getId())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only hosts can view audit logs.");
+    }
+
+    return auditLogRepo.findByEventIdOrderByTimestampDesc(event.getId());
+  }
+
+  // BookMark APIs
+
+  @PostMapping("/{id}/bookmark")
+  public Map<String, String> bookmarkEvent(@PathVariable String id, Authentication auth) {
+    User user = getCurrentUser(auth);
+    Event event = repo.findById(id).orElseThrow();
+
+    user.getBookmarkedEventIds().add(event.getId());
+    users.save(user);
+
+    return Map.of("message", "Event bookmarked");
+  }
+
+  // Get Bookmarked Events
+  @GetMapping("/bookmarks")
+  public List<Event> getBookmarkedEvents(Authentication auth) {
+    User user = getCurrentUser(auth);
+
+    if (user.getBookmarkedEventIds().isEmpty()) {
+      return List.of();
+    }
+
+    return repo.findAllById(user.getBookmarkedEventIds()).stream()
+        .filter(e -> !e.isCanceled())
+        .collect(Collectors.toList());
+  }
+
+  // Remove Bookmark
+  @DeleteMapping("/{id}/bookmark")
+  public Map<String, String> removeBookmark(@PathVariable String id, Authentication auth) {
+    User user = getCurrentUser(auth);
+
+    if (user.getBookmarkedEventIds().remove(id)) {
+      users.save(user);
+      return Map.of("message", "Bookmark removed");
+    }
+
+    return Map.of("message", "Bookmark not found");
   }
 
   // --- Helpers ---
@@ -527,92 +790,99 @@ public class EventController {
     return null;
   }
 
-  private static Event.JoinRequest findOrCreateJoinRequest(Event e, String userId) {
-    Event.JoinRequest jr = findJoinRequestForUser(e, userId);
-    if (jr == null) {
-      jr = new Event.JoinRequest(userId, Event.JoinStatus.PENDING, Instant.now());
-      e.getJoinRequests().add(jr);
-    }
-    return jr;
-  }
+  // private static Event.JoinRequest findOrCreateJoinRequest(Event e, String
+  // userId) {
+  // Event.JoinRequest jr = findJoinRequestForUser(e, userId);
+  // if (jr == null) {
+  // jr = new Event.JoinRequest(userId, Event.JoinStatus.PENDING, Instant.now());
+  // e.getJoinRequests().add(jr);
+  // }
+  // return jr;
+  // }
 
-  private void assertAdmin(Authentication auth, Event e) {
-    User u = getCurrentUser(auth);
-    if (!Objects.equals(e.getCreatedByUserId(), u.getId()) &&
-        (e.getCoHostUserIds() == null || !e.getCoHostUserIds().contains(u.getId()))) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not event owner or co-host");
-    }
-  }
+  // private void assertAdmin(Authentication auth, Event e) {
+  // User u = getCurrentUser(auth);
+  // if (!Objects.equals(e.getCreatedByUserId(), u.getId()) &&
+  // (e.getCoHostUserIds() == null || !e.getCoHostUserIds().contains(u.getId())))
+  // {
+  // throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not event owner or
+  // co-host");
+  // }
+  // }
 
-  private void approveUser(Event e, String userId) {
-    boolean hasCapacity = e.getMaxParticipants() == null || e.getParticipants().size() < e.getMaxParticipants();
-    if (!hasCapacity) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Event is at capacity");
-    }
-    Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
-    jr.setStatus(Event.JoinStatus.APPROVED);
-    if (jr.getRequestedAt() == null)
-      jr.setRequestedAt(Instant.now());
-    e.getParticipants().add(userId);
-  }
+  // private void approveUser(Event e, String userId) {
+  // boolean hasCapacity = e.getMaxParticipants() == null ||
+  // e.getParticipants().size() < e.getMaxParticipants();
+  // if (!hasCapacity) {
+  // throw new ResponseStatusException(HttpStatus.CONFLICT, "Event is at
+  // capacity");
+  // }
+  // Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
+  // jr.setStatus(Event.JoinStatus.APPROVED);
+  // if (jr.getRequestedAt() == null)
+  // jr.setRequestedAt(Instant.now());
+  // e.getParticipants().add(userId);
+  // }
 
-  private void rejectUser(Event e, String userId) {
-    Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
-    jr.setStatus(Event.JoinStatus.REJECTED);
-    if (jr.getRequestedAt() == null)
-      jr.setRequestedAt(Instant.now());
-    e.getParticipants().remove(userId);
-  }
+  // private void rejectUser(Event e, String userId) {
+  // Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
+  // jr.setStatus(Event.JoinStatus.REJECTED);
+  // if (jr.getRequestedAt() == null)
+  // jr.setRequestedAt(Instant.now());
+  // e.getParticipants().remove(userId);
+  // }
 
-  // ===== Date/Time helpers (NEW) =====
+  // // ===== Date/Time helpers (NEW) =====
 
-  private static Instant buildInstantFromUi(String dateStr, String timeStr) {
-    // Remove ordinal suffixes: 1st/2nd/3rd/4th → 1/2/3/4
-    String normalizedDate = dateStr
-        .replaceAll("(?i)(\\d+)(st|nd|rd|th)", "$1")
-        .trim();
+  // private static Instant buildInstantFromUi(String dateStr, String timeStr) {
+  // // Remove ordinal suffixes: 1st/2nd/3rd/4th → 1/2/3/4
+  // String normalizedDate = dateStr
+  // .replaceAll("(?i)(\\d+)(st|nd|rd|th)", "$1")
+  // .trim();
 
-    // Example: "September 10, 2025"
-    DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMMM d, uuuu", Locale.ENGLISH);
+  // // Example: "September 10, 2025"
+  // DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMMM d, uuuu",
+  // Locale.ENGLISH);
 
-    // Example: "11:55am" / "3pm"
-    // Handle optional minutes
-    String normalizedTime = timeStr.toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
-    DateTimeFormatter timeFmt = normalizedTime.contains(":")
-        ? DateTimeFormatter.ofPattern("h:mma", Locale.ENGLISH)
-        : DateTimeFormatter.ofPattern("ha", Locale.ENGLISH);
+  // // Example: "11:55am" / "3pm"
+  // // Handle optional minutes
+  // String normalizedTime = timeStr.toUpperCase(Locale.ROOT).replaceAll("\\s+",
+  // "");
+  // DateTimeFormatter timeFmt = normalizedTime.contains(":")
+  // ? DateTimeFormatter.ofPattern("h:mma", Locale.ENGLISH)
+  // : DateTimeFormatter.ofPattern("ha", Locale.ENGLISH);
 
-    LocalDate date = LocalDate.parse(normalizedDate, dateFmt);
-    LocalTime time = LocalTime.parse(normalizedTime, timeFmt);
+  // LocalDate date = LocalDate.parse(normalizedDate, dateFmt);
+  // LocalTime time = LocalTime.parse(normalizedTime, timeFmt);
 
-    ZonedDateTime zdt = ZonedDateTime.of(date, time, DEFAULT_ZONE);
-    return zdt.toInstant();
-  }
+  // ZonedDateTime zdt = ZonedDateTime.of(date, time, DEFAULT_ZONE);
+  // return zdt.toInstant();
+  // }
 
-  private static Instant addDuration(Instant start, String durationStr) {
-    if (durationStr == null || durationStr.isBlank()) {
-      // Default to 1 hour if not provided
-      return start.plus(Duration.ofHours(1));
-    }
-    String s = durationStr.trim().toLowerCase(Locale.ROOT);
-    // Try "90 minutes", "90 min", "1 hour", "2 hours"
-    long minutes = 0;
-    if (s.contains("hour")) {
-      // extract first number
-      long hours = extractLeadingNumber(s);
-      minutes = hours * 60;
-    } else if (s.contains("min")) {
-      minutes = extractLeadingNumber(s);
-    } else {
-      // fallback: treat as minutes if just a number
-      try {
-        minutes = Long.parseLong(s);
-      } catch (Exception ignored) {
-        minutes = 60;
-      }
-    }
-    return start.plus(Duration.ofMinutes(minutes > 0 ? minutes : 60));
-  }
+  // private static Instant addDuration(Instant start, String durationStr) {
+  // if (durationStr == null || durationStr.isBlank()) {
+  // // Default to 1 hour if not provided
+  // return start.plus(Duration.ofHours(1));
+  // }
+  // String s = durationStr.trim().toLowerCase(Locale.ROOT);
+  // // Try "90 minutes", "90 min", "1 hour", "2 hours"
+  // long minutes = 0;
+  // if (s.contains("hour")) {
+  // // extract first number
+  // long hours = extractLeadingNumber(s);
+  // minutes = hours * 60;
+  // } else if (s.contains("min")) {
+  // minutes = extractLeadingNumber(s);
+  // } else {
+  // // fallback: treat as minutes if just a number
+  // try {
+  // minutes = Long.parseLong(s);
+  // } catch (Exception ignored) {
+  // minutes = 60;
+  // }
+  // }
+  // return start.plus(Duration.ofMinutes(minutes > 0 ? minutes : 60));
+  // }
 
   private static long extractLeadingNumber(String s) {
     var m = java.util.regex.Pattern.compile("(\\d+)").matcher(s);

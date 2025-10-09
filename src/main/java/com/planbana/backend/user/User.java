@@ -45,6 +45,8 @@ public class User extends BaseEntity {
   private Double latitude;
   private Double longitude;
 
+  private Set<String> bookmarkedEventIds = new HashSet<>();
+
   // === Government ID verification status ===
   public enum VerificationStatus {
     UNVERIFIED,
@@ -62,15 +64,18 @@ public class User extends BaseEntity {
 
   // ---------- rating helpers ----------
   public void upsertRating(String raterUserId, int value) {
-    if (raterUserId == null || raterUserId.isBlank()) return;
-    if (value < 1 || value > 5) return;
+    if (raterUserId == null || raterUserId.isBlank())
+      return;
+    if (value < 1 || value > 5)
+      return;
 
     Integer previous = ratingsByUserId.put(raterUserId, value);
     recomputeRatings(previous, value);
   }
 
   public void removeRating(String raterUserId) {
-    if (raterUserId == null || raterUserId.isBlank()) return;
+    if (raterUserId == null || raterUserId.isBlank())
+      return;
     Integer previous = ratingsByUserId.remove(raterUserId);
     if (previous != null) {
       fullRecompute();
@@ -88,7 +93,8 @@ public class User extends BaseEntity {
     long cnt = ratingsByUserId.size();
     long sum = 0;
     for (Integer v : ratingsByUserId.values()) {
-      if (v != null) sum += v;
+      if (v != null)
+        sum += v;
     }
     this.ratingCount = cnt;
     this.ratingAverage = cnt == 0 ? 0.0 : (double) sum / (double) cnt;
@@ -96,74 +102,189 @@ public class User extends BaseEntity {
 
   // ---------- getters/setters ----------
 
-  public String getEmail() { return email; }
-  public void setEmail(String email) { this.email = email; }
+  public String getEmail() {
+    return email;
+  }
 
-  public String getPhone() { return phone; }
-  public void setPhone(String phone) { this.phone = phone; }
+  public void setEmail(String email) {
+    this.email = email;
+  }
 
-  public String getPasswordHash() { return passwordHash; }
-  public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+  public String getPhone() {
+    return phone;
+  }
 
-  public String getFirebaseUid() { return firebaseUid; }
-  public void setFirebaseUid(String firebaseUid) { this.firebaseUid = firebaseUid; }
+  public String getFirebaseUid() {
+    return firebaseUid;
+  }
 
-  public String getName() { return name; }
-  public void setName(String name) { this.name = name; }
+  public void setFirebaseUid(String firebaseUid) {
+    this.firebaseUid = firebaseUid;
+  }
 
-  public String getDisplayName() { return displayName; }
-  public void setDisplayName(String displayName) { this.displayName = displayName; }
+  public void setPhone(String phone) {
+    this.phone = phone;
+  }
 
-  public String getAvatarUrl() { return avatarUrl; }
-  public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+  public String getPasswordHash() {
+    return passwordHash;
+  }
 
-  public boolean isEmailVerified() { return emailVerified; }
-  public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
+  public void setPasswordHash(String passwordHash) {
+    this.passwordHash = passwordHash;
+  }
 
-  public boolean isPhoneVerified() { return phoneVerified; }
-  public void setPhoneVerified(boolean phoneVerified) { this.phoneVerified = phoneVerified; }
+  public String getName() {
+    return name;
+  }
 
-  public Set<String> getRoles() { return roles; }
-  public void setRoles(Set<String> roles) { this.roles = roles; }
+  public void setName(String name) {
+    this.name = name;
+  }
 
-  public List<String> getLanguages() { return languages; }
-  public void setLanguages(List<String> languages) { this.languages = languages; }
+  public String getDisplayName() {
+    return displayName;
+  }
 
-  public Set<String> getHobbies() { return hobbies; }
-  public void setHobbies(Set<String> hobbies) { this.hobbies = hobbies; }
+  public void setDisplayName(String displayName) {
+    this.displayName = displayName;
+  }
 
-  public String getGender() { return gender; }
-  public void setGender(String gender) { this.gender = gender; }
+  public String getAvatarUrl() {
+    return avatarUrl;
+  }
 
-  public LocalDate getBirthDate() { return birthDate; }
-  public void setBirthDate(LocalDate birthDate) { this.birthDate = birthDate; }
+  public void setAvatarUrl(String avatarUrl) {
+    this.avatarUrl = avatarUrl;
+  }
 
-  public String getOccupation() { return occupation; }
-  public void setOccupation(String occupation) { this.occupation = occupation; }
+  public boolean isEmailVerified() {
+    return emailVerified;
+  }
 
-  public String getCity() { return city; }
-  public void setCity(String city) { this.city = city; }
+  public void setEmailVerified(boolean emailVerified) {
+    this.emailVerified = emailVerified;
+  }
 
-  public Double getLatitude() { return latitude; }
-  public void setLatitude(Double latitude) { this.latitude = latitude; }
+  public boolean isPhoneVerified() {
+    return phoneVerified;
+  }
 
-  public Double getLongitude() { return longitude; }
-  public void setLongitude(Double longitude) { this.longitude = longitude; }
+  public void setPhoneVerified(boolean phoneVerified) {
+    this.phoneVerified = phoneVerified;
+  }
 
-  public VerificationStatus getGovIdVerificationStatus() { return govIdVerificationStatus; }
+  public Set<String> getRoles() {
+    return roles;
+  }
+
+  public void setRoles(Set<String> roles) {
+    this.roles = roles;
+  }
+
+  public List<String> getLanguages() {
+    return languages;
+  }
+
+  public void setLanguages(List<String> languages) {
+    this.languages = languages;
+  }
+
+  public Set<String> getHobbies() {
+    return hobbies;
+  }
+
+  public void setHobbies(Set<String> hobbies) {
+    this.hobbies = hobbies;
+  }
+
+  public String getGender() {
+    return gender;
+  }
+
+  public void setGender(String gender) {
+    this.gender = gender;
+  }
+
+  public LocalDate getBirthDate() {
+    return birthDate;
+  }
+
+  public void setBirthDate(LocalDate birthDate) {
+    this.birthDate = birthDate;
+  }
+
+  public String getOccupation() {
+    return occupation;
+  }
+
+  public void setOccupation(String occupation) {
+    this.occupation = occupation;
+  }
+
+  public String getCity() {
+    return city;
+  }
+
+  public void setCity(String city) {
+    this.city = city;
+  }
+
+  public Double getLatitude() {
+    return latitude;
+  }
+
+  public void setLatitude(Double latitude) {
+    this.latitude = latitude;
+  }
+
+  public Double getLongitude() {
+    return longitude;
+  }
+
+  public void setLongitude(Double longitude) {
+    this.longitude = longitude;
+  }
+
+  public VerificationStatus getGovIdVerificationStatus() {
+    return govIdVerificationStatus;
+  }
+
   public void setGovIdVerificationStatus(VerificationStatus govIdVerificationStatus) {
     this.govIdVerificationStatus = govIdVerificationStatus;
   }
 
-  public long getRatingCount() { return ratingCount; }
-  public void setRatingCount(long ratingCount) { this.ratingCount = ratingCount; }
+  public long getRatingCount() {
+    return ratingCount;
+  }
 
-  public double getRatingAverage() { return ratingAverage; }
-  public void setRatingAverage(double ratingAverage) { this.ratingAverage = ratingAverage; }
+  public void setRatingCount(long ratingCount) {
+    this.ratingCount = ratingCount;
+  }
 
-  public Map<String, Integer> getRatingsByUserId() { return ratingsByUserId; }
+  public double getRatingAverage() {
+    return ratingAverage;
+  }
+
+  public void setRatingAverage(double ratingAverage) {
+    this.ratingAverage = ratingAverage;
+  }
+
+  public Map<String, Integer> getRatingsByUserId() {
+    return ratingsByUserId;
+  }
+
   public void setRatingsByUserId(Map<String, Integer> ratingsByUserId) {
     this.ratingsByUserId = ratingsByUserId == null ? new HashMap<>() : ratingsByUserId;
     fullRecompute();
   }
+
+  public Set<String> getBookmarkedEventIds() {
+    return bookmarkedEventIds;
+  }
+
+  public void setBookmarkedEventIds(Set<String> bookmarkedEventIds) {
+    this.bookmarkedEventIds = bookmarkedEventIds == null ? new HashSet<>() : bookmarkedEventIds;
+  }
+
 }
