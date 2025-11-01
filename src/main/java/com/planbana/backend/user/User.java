@@ -47,6 +47,8 @@ public class User extends BaseEntity {
 
   private Set<String> bookmarkedEventIds = new HashSet<>();
 
+  private String profilePhotoUrl;
+
   // === Government ID verification status ===
   public enum VerificationStatus {
     UNVERIFIED,
