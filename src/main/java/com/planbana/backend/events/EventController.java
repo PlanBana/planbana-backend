@@ -18,6 +18,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import com.planbana.backend.chat.ChatRoomService;
+import com.planbana.backend.chat.ChatRoom;
 
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -38,10 +40,13 @@ public class EventController {
   private static final Logger logger = LoggerFactory.getLogger(EventController.class);
   private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Kolkata");
 
-  public EventController(EventRepository repo, MongoTemplate mongo, UserRepository users) {
+  private final ChatRoomService chatService;
+
+  public EventController(EventRepository repo, MongoTemplate mongo, UserRepository users, ChatRoomService chatService) {
     this.repo = repo;
     this.mongo = mongo;
     this.users = users;
+    this.chatService = chatService;
   }
 
   public static class CreateEvent {
@@ -90,7 +95,13 @@ public class EventController {
     // ✅ Automatically add creator as APPROVED participant
     e.getParticipants().add(u.getId());
 
-    return repo.save(e);
+    repo.save(e);
+
+    // ✅ Auto-create chatroom for this event
+    chatService.createIfNotExists(e.getId(), e.getTitle(), u.getId(), e.getImageUrl());
+
+    return e;
+
   }
 
   @GetMapping
@@ -290,38 +301,45 @@ public class EventController {
   // }
 
   @PostMapping("/{id}/join")
-  public JoinStatusResponse requestJoin(@PathVariable String id, Authentication auth) {
+public JoinStatusResponse requestJoin(@PathVariable String id, Authentication auth) {
     User u = getCurrentUser(auth);
     Event e = repo.findById(id).orElseThrow();
 
+    // ✅ Auto-approve if host
     if (Objects.equals(e.getCreatedByUserId(), u.getId())) {
-      ensureParticipant(e, u.getId());
-      repo.save(e);
-      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+        ensureParticipant(e, u.getId());
+        repo.save(e);
+
+        // ✅ Sync chatroom participants
+        chatService.addParticipantIfExists(e.getId(), u.getId());
+        return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
     }
 
+    // ✅ Already joined → ensure chatroom sync
     if (e.getParticipants().contains(u.getId())) {
-      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+        chatService.addParticipantIfExists(e.getId(), u.getId());
+        return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
     }
 
     Event.JoinRequest existing = findJoinRequestForUser(e, u.getId());
     if (existing != null) {
-      return new JoinStatusResponse(existing.getStatus().name());
+        return new JoinStatusResponse(existing.getStatus().name());
     }
 
     boolean hasCapacity = e.getMaxParticipants() == null || e.getParticipants().size() < e.getMaxParticipants();
 
     if (hasCapacity) {
-      Event.JoinRequest jr = new Event.JoinRequest(u.getId(), Event.JoinStatus.PENDING, Instant.now());
-      e.getJoinRequests().add(jr);
-      repo.save(e);
-      return new JoinStatusResponse(Event.JoinStatus.PENDING.name());
+        // ✅ Auto-approve if host allows instant join (optional logic)
+        Event.JoinRequest jr = new Event.JoinRequest(u.getId(), Event.JoinStatus.PENDING, Instant.now());
+        e.getJoinRequests().add(jr);
+        repo.save(e);
+        return new JoinStatusResponse(Event.JoinStatus.PENDING.name());
     } else {
-      e.getParticipantsWaitingList().add(u.getId());
-      repo.save(e);
-      return new JoinStatusResponse("Participant limit reached");
+        e.getParticipantsWaitingList().add(u.getId());
+        repo.save(e);
+        return new JoinStatusResponse("Participant limit reached");
     }
-  }
+}
 
   @DeleteMapping("/{id}/leave")
   public Map<String, String> leaveEvent(@PathVariable String id, Authentication auth) {
@@ -437,6 +455,7 @@ public class EventController {
 
     if (newStatus == Event.JoinStatus.APPROVED) {
       e.getParticipants().add(userId);
+      chatService.addParticipantIfExists(e.getId(), userId);
     } else if (newStatus == Event.JoinStatus.PENDING) {
       Event.JoinRequest jr = new Event.JoinRequest(userId, Event.JoinStatus.PENDING, Instant.now());
       e.getJoinRequests().add(jr);
@@ -599,6 +618,42 @@ public class EventController {
     }
 
     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Action must be 'add' or 'remove'");
+  }
+
+  @GetMapping("/{id}/participants")
+  public List<Map<String, Object>> getEventParticipants(
+      @PathVariable String id,
+      Authentication auth) {
+    Event e = repo.findById(id).orElseThrow();
+    User currentUser = getCurrentUser(auth);
+
+    boolean isHost = e.isHost(currentUser.getId());
+    boolean isCoHost = e.isCoHost(currentUser.getId());
+    boolean isParticipant = e.getParticipants().contains(currentUser.getId());
+
+    // 🚫 Restrict visibility: only host, co-host, or participant
+    if (!isHost && !isCoHost && !isParticipant) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+          "You must be a host or participant to view attendees.");
+    }
+
+    // ✅ Return public info of approved participants
+    return e.getParticipants().stream()
+        .map(uid -> users.findById(uid))
+        .filter(Optional::isPresent)
+        .map(opt -> opt.get()) // use explicit lambda
+        .map(u -> {
+          Map<String, Object> map = new HashMap<>();
+          map.put("id", u.getId());
+          String name = Optional.ofNullable(u.getDisplayName())
+              .orElse(Optional.ofNullable(u.getName())
+                  .orElse("Unnamed"));
+          map.put("name", name);
+          map.put("profileImage", u.getAvatarUrl());
+          return map;
+        })
+        .collect(Collectors.toList()); // ✅ works in all Java versions
+
   }
 
   @DeleteMapping("/{eventId}/participants/{userId}")

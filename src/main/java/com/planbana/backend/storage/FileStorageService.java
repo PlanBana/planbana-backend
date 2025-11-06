@@ -3,7 +3,6 @@ package com.planbana.backend.storage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.io.IOException;
 import java.nio.file.*;
 
@@ -18,18 +17,33 @@ public class FileStorageService {
             throw new IOException("Empty or missing file");
         }
 
-        // Ensure directory exists
         Path uploadPath = Paths.get(uploadDir, "avatars").toAbsolutePath().normalize();
         Files.createDirectories(uploadPath);
 
-        // Create unique filename
         String cleanName = Path.of(file.getOriginalFilename()).getFileName().toString().replaceAll("\\s+", "_");
         String fileName = userId + "_" + System.currentTimeMillis() + "_" + cleanName;
 
         Path filePath = uploadPath.resolve(fileName);
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-        // ✅ Return the accessible URL for frontend preview
         return "/uploads/avatars/" + fileName;
+    }
+
+    // 👇 For chatroom DP uploads
+    public String saveChatroomImage(MultipartFile file, String chatRoomId) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IOException("Empty or missing file");
+        }
+
+        Path uploadPath = Paths.get(uploadDir, "chatrooms").toAbsolutePath().normalize();
+        Files.createDirectories(uploadPath);
+
+        String cleanName = Path.of(file.getOriginalFilename()).getFileName().toString().replaceAll("\\s+", "_");
+        String fileName = chatRoomId + "_" + System.currentTimeMillis() + "_" + cleanName;
+
+        Path filePath = uploadPath.resolve(fileName);
+        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+        return "/uploads/chatrooms/" + fileName;
     }
 }
