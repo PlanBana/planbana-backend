@@ -40,10 +40,13 @@ public class UserController {
     public String displayName;
     public String avatarUrl;
     public String city;
+    public String state;
+    public String country;
     public Double latitude;
     public Double longitude;
     public String gender;
     public String occupation;
+    public String company;
     public LocalDate birthDate;
     public List<String> languages;
     public Set<String> hobbies;
@@ -66,6 +69,10 @@ public class UserController {
       u.setAvatarUrl(req.avatarUrl);
     if (req.city != null)
       u.setCity(req.city);
+    if (req.state != null)
+      u.setState(req.state);
+    if (req.country != null)
+      u.setCountry(req.country);
     if (req.latitude != null)
       u.setLatitude(req.latitude);
     if (req.longitude != null)
@@ -74,6 +81,8 @@ public class UserController {
       u.setGender(req.gender);
     if (req.occupation != null)
       u.setOccupation(req.occupation);
+    if (req.company != null)
+      u.setCompany(req.company);
     if (req.birthDate != null)
       u.setBirthDate(req.birthDate);
     if (req.languages != null)

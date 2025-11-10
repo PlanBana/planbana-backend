@@ -28,15 +28,16 @@ public class AuthController {
   private final JwtService jwt;
 
   public AuthController(UserRepository users,
-                        PasswordEncoder encoder,
-                        JwtService jwt) {
+      PasswordEncoder encoder,
+      JwtService jwt) {
     this.users = users;
     this.encoder = encoder;
     this.jwt = jwt;
   }
 
   private static String normalizePhone(String phone) {
-    if (phone == null) return null;
+    if (phone == null)
+      return null;
     return phone.trim().replaceAll("\\s+", "").replaceAll("[^0-9]", "");
   }
 
@@ -58,13 +59,14 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("status", "REGISTER_REQUIRED", "phone", phone, "firebaseUid", uid));
       }
     } catch (Exception e) {
-      return ResponseEntity.badRequest().body(Map.of("error", "Firebase token invalid/expired", "details", e.getMessage()));
+      return ResponseEntity.badRequest()
+          .body(Map.of("error", "Firebase token invalid/expired", "details", e.getMessage()));
     }
   }
 
   @PostMapping("/register-minimal")
   public ResponseEntity<?> registerMinimal(@Valid @RequestBody AuthDtos.RegisterMinimalRequest req,
-                                           HttpServletResponse res) {
+      HttpServletResponse res) {
     try {
       FirebaseToken decoded = FirebaseAuth.getInstance().verifyIdToken(req.firebaseIdToken);
       String uid = decoded.getUid();
@@ -101,19 +103,38 @@ public class AuthController {
       Cookie cookie = new Cookie("access_token", access);
       cookie.setPath("/");
       cookie.setHttpOnly(true);
-      cookie.setSecure(true);
-      cookie.setAttribute("SameSite", "Lax");
+      cookie.setSecure(false);
+      cookie.setAttribute("SameSite", "None");
       res.addCookie(cookie);
 
-      return ResponseEntity.ok(Map.of("message", "Registered successfully", "accessToken", access, "refreshToken", refresh));
+      return ResponseEntity
+          .ok(Map.of("message", "Registered successfully", "accessToken", access, "refreshToken", refresh));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(Map.of("error", "Registration failed", "details", e.getMessage()));
     }
   }
 
+  @PostMapping("/refresh")
+  public ResponseEntity<?> refresh(@RequestBody Map<String, String> body) {
+    String refresh = body.get("refreshToken");
+    if (refresh == null || !jwt.validateToken(refresh)) {
+      return ResponseEntity.status(401).body(Map.of("error", "Invalid or expired refresh token"));
+    }
+
+    String username = jwt.getUsername(refresh);
+    List<String> roles = jwt.getRoles(refresh);
+
+    String newAccess = jwt.generateAccess(username, Set.copyOf(roles));
+    String newRefresh = jwt.generateRefresh(username); // optional rotation
+
+    return ResponseEntity.ok(Map.of(
+        "accessToken", newAccess,
+        "refreshToken", newRefresh));
+  }
+
   @PostMapping("/login-firebase")
   public ResponseEntity<?> loginWithFirebase(@Valid @RequestBody AuthDtos.FirebaseLoginRequest req,
-                                             HttpServletResponse res) {
+      HttpServletResponse res) {
     try {
       FirebaseToken decoded = FirebaseAuth.getInstance().verifyIdToken(req.firebaseIdToken);
       String uid = decoded.getUid();
@@ -150,7 +171,8 @@ public class AuthController {
 
       return ResponseEntity.ok(Map.of("message", "Login successful", "accessToken", access, "refreshToken", refresh));
     } catch (Exception e) {
-      return ResponseEntity.badRequest().body(Map.of("error", "Firebase token invalid/expired", "details", e.getMessage()));
+      return ResponseEntity.badRequest()
+          .body(Map.of("error", "Firebase token invalid/expired", "details", e.getMessage()));
     }
   }
 }

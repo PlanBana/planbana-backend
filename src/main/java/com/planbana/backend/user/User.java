@@ -39,8 +39,12 @@ public class User extends BaseEntity {
 
   private String gender;
   private LocalDate birthDate;
-  private String occupation;
 
+  private String occupation;
+  private String company;
+
+  private String state;
+  private String country;
   private String city;
   private Double latitude;
   private Double longitude;
@@ -224,12 +228,36 @@ public class User extends BaseEntity {
     this.occupation = occupation;
   }
 
+  public String getCompany() {
+    return company;
+  }
+
+  public void setCompany(String company) {
+    this.company = company;
+  }
+
   public String getCity() {
     return city;
   }
 
   public void setCity(String city) {
     this.city = city;
+  }
+
+  public String getState() {
+    return state;
+  }
+
+  public void setState(String state) {
+    this.state = state;
+  }
+
+  public String getCountry() {
+    return country;
+  }
+
+  public void setCountry(String country) {
+    this.country = country;
   }
 
   public Double getLatitude() {

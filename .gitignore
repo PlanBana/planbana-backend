@@ -7,3 +7,6 @@ target/
 # Firebase service account
 src/main/resources/firebase-service-account.json
 *.json
+
+# image upload
+uploads

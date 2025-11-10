@@ -24,14 +24,15 @@ public class OtpService {
 
   private final SecureRandom random = new SecureRandom();
 
-  public static final int OTP_TTL_SECONDS = 300;                // 5 mins
-  public static final int RESEND_COOLDOWN_SECONDS = 30;          // cooldown
+  public static final int OTP_TTL_SECONDS = 300; // 5 mins
+  public static final int RESEND_COOLDOWN_SECONDS = 30; // cooldown
   public static final int MAX_ATTEMPTS = 5;
   public static final int REG_TICKET_TTL_SECONDS = 24 * 60 * 60; // 24h
 
   // ------------ phone normalization (basic digits-only) ------------
   private static String normalizePhone(String phone) {
-    if (phone == null) return null;
+    if (phone == null)
+      return null;
     return phone.trim().replaceAll("\\s+", "").replaceAll("[^0-9]", "");
   }
 
@@ -57,7 +58,8 @@ public class OtpService {
     String code = String.format("%06d", random.nextInt(1_000_000));
     otpStore.put(k, new OtpEntry(code, now.plusSeconds(OTP_TTL_SECONDS), now, 0));
 
-    // INFO so you can see it in console during dev. Do NOT keep at INFO in production.
+    // INFO so you can see it in console during dev. Do NOT keep at INFO in
+    // production.
     log.info("DEV OTP {} for {} is {}", purpose, phone, code);
     return code;
   }
@@ -113,7 +115,9 @@ public class OtpService {
     return ConsumeResult.OK;
   }
 
-  public enum ConsumeResult { OK, NOT_FOUND, PHONE_MISMATCH, EXPIRED }
+  public enum ConsumeResult {
+    OK, NOT_FOUND, PHONE_MISMATCH, EXPIRED
+  }
 
   // ---------------- Internal types ----------------
   private static class OtpEntry {
@@ -121,6 +125,7 @@ public class OtpService {
     final Instant expiry;
     final Instant sentAt;
     int attempts;
+
     OtpEntry(String code, Instant expiry, Instant sentAt, int attempts) {
       this.code = code;
       this.expiry = expiry;
@@ -132,6 +137,7 @@ public class OtpService {
   private static class RegistrationTicket {
     final String phone;
     final Instant expiry;
+
     RegistrationTicket(String phone, Instant expiry) {
       this.phone = phone;
       this.expiry = expiry;
