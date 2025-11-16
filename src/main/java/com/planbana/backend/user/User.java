@@ -27,8 +27,11 @@ public class User extends BaseEntity {
 
   // Optional display/handle shown in UI
   private String displayName;
-
   private String avatarUrl;
+
+  private Boolean disabled = false;
+
+  private String bio;
 
   private boolean emailVerified = false;
   private boolean phoneVerified = false;
@@ -118,6 +121,22 @@ public class User extends BaseEntity {
 
   public String getPhone() {
     return phone;
+  }
+
+  public Boolean getDisabled() {
+    return disabled;
+  }
+
+  public void setDisabled(Boolean disabled) {
+    this.disabled = disabled;
+  }
+
+  public String getBio() {
+    return bio;
+  }
+
+  public void setBio(String bio) {
+    this.bio = bio;
   }
 
   public String getFirebaseUid() {

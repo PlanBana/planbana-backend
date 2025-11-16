@@ -301,45 +301,45 @@ public class EventController {
   // }
 
   @PostMapping("/{id}/join")
-public JoinStatusResponse requestJoin(@PathVariable String id, Authentication auth) {
+  public JoinStatusResponse requestJoin(@PathVariable String id, Authentication auth) {
     User u = getCurrentUser(auth);
     Event e = repo.findById(id).orElseThrow();
 
     // ✅ Auto-approve if host
     if (Objects.equals(e.getCreatedByUserId(), u.getId())) {
-        ensureParticipant(e, u.getId());
-        repo.save(e);
+      ensureParticipant(e, u.getId());
+      repo.save(e);
 
-        // ✅ Sync chatroom participants
-        chatService.addParticipantIfExists(e.getId(), u.getId());
-        return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+      // ✅ Sync chatroom participants
+      chatService.addParticipantIfExists(e.getId(), u.getId());
+      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
     }
 
     // ✅ Already joined → ensure chatroom sync
     if (e.getParticipants().contains(u.getId())) {
-        chatService.addParticipantIfExists(e.getId(), u.getId());
-        return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
+      chatService.addParticipantIfExists(e.getId(), u.getId());
+      return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
     }
 
     Event.JoinRequest existing = findJoinRequestForUser(e, u.getId());
     if (existing != null) {
-        return new JoinStatusResponse(existing.getStatus().name());
+      return new JoinStatusResponse(existing.getJoinStatus().name());
     }
 
     boolean hasCapacity = e.getMaxParticipants() == null || e.getParticipants().size() < e.getMaxParticipants();
 
     if (hasCapacity) {
-        // ✅ Auto-approve if host allows instant join (optional logic)
-        Event.JoinRequest jr = new Event.JoinRequest(u.getId(), Event.JoinStatus.PENDING, Instant.now());
-        e.getJoinRequests().add(jr);
-        repo.save(e);
-        return new JoinStatusResponse(Event.JoinStatus.PENDING.name());
+      // ✅ Auto-approve if host allows instant join (optional logic)
+      Event.JoinRequest jr = new Event.JoinRequest(u.getId(), Event.JoinStatus.PENDING, Instant.now());
+      e.getJoinRequests().add(jr);
+      repo.save(e);
+      return new JoinStatusResponse(Event.JoinStatus.PENDING.name());
     } else {
-        e.getParticipantsWaitingList().add(u.getId());
-        repo.save(e);
-        return new JoinStatusResponse("Participant limit reached");
+      e.getParticipantsWaitingList().add(u.getId());
+      repo.save(e);
+      return new JoinStatusResponse("Participant limit reached");
     }
-}
+  }
 
   @DeleteMapping("/{id}/leave")
   public Map<String, String> leaveEvent(@PathVariable String id, Authentication auth) {
@@ -401,13 +401,13 @@ public JoinStatusResponse requestJoin(@PathVariable String id, Authentication au
 
         if (jr == null)
           continue; // Skip if no join request or participation
-        status = jr.getStatus().name();
+        status = jr.getJoinStatus().name();
       }
 
       JoinStatusOverview overview = new JoinStatusOverview();
       overview.setEventId(e.getId());
       overview.setEventTitle(e.getTitle());
-      overview.setStatus(status);
+      overview.setJoinStatus(status);
       overview.setRedirectToEventPage("/events/" + e.getId());
 
       if (Event.JoinStatus.APPROVED.name().equals(status)) {

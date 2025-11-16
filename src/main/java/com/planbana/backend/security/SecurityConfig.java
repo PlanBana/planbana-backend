@@ -23,7 +23,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 @Configuration
-@EnableMethodSecurity
+@EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
   private final JwtAuthenticationFilter jwtFilter;
@@ -49,8 +49,7 @@ public class SecurityConfig {
             // ✅ Require USER role for /api/users/**
             .requestMatchers("/api/users/**").hasRole("USER")
 
-            .anyRequest().authenticated()
-        )
+            .anyRequest().authenticated())
         .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
     return http.build();
@@ -78,8 +77,7 @@ public class SecurityConfig {
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://10.0.2.2:3000",
-        "http://10.0.2.2:5173"
-    ));
+        "http://10.0.2.2:5173"));
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("*"));
     config.setAllowCredentials(true);

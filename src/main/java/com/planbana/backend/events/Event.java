@@ -60,17 +60,36 @@ public class Event extends BaseEntity {
     NONE, PENDING, APPROVED, REJECTED, WAITLISTED
   }
 
+  // === Event status for admin moderation ===
+
+  public enum Status {
+    ACTIVE,
+    BLOCKED,
+    HIDDEN,
+    PENDING_REVIEW
+  }
+
+  private Status status = Status.ACTIVE;
+
+  public Status getStatus() {
+    return status;
+  }
+
+  public void setStatus(Status status) {
+    this.status = status;
+  }
+
   public static class JoinRequest {
     private String userId;
-    private JoinStatus status;
+    private JoinStatus joinStatus;
     private Instant requestedAt;
 
     public JoinRequest() {
     }
 
-    public JoinRequest(String userId, JoinStatus status, Instant requestedAt) {
+    public JoinRequest(String userId, JoinStatus joinStatus, Instant requestedAt) {
       this.userId = userId;
-      this.status = status;
+      this.joinStatus = joinStatus;
       this.requestedAt = requestedAt;
     }
 
@@ -82,12 +101,12 @@ public class Event extends BaseEntity {
       this.userId = userId;
     }
 
-    public JoinStatus getStatus() {
-      return status;
+    public JoinStatus getJoinStatus() {
+      return joinStatus;
     }
 
-    public void setStatus(JoinStatus status) {
-      this.status = status;
+    public void setJoinStatus(JoinStatus joinStatus) {
+      this.joinStatus = joinStatus;
     }
 
     public Instant getRequestedAt() {

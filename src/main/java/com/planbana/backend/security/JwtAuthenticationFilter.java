@@ -29,15 +29,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    if (HttpMethod.OPTIONS.matches(request.getMethod())) return true;
+    if (HttpMethod.OPTIONS.matches(request.getMethod()))
+      return true;
     String path = request.getServletPath();
     return path.startsWith("/api/auth");
   }
 
   @Override
   protected void doFilterInternal(HttpServletRequest request,
-                                  HttpServletResponse response,
-                                  FilterChain filterChain) throws ServletException, IOException {
+      HttpServletResponse response,
+      FilterChain filterChain) throws ServletException, IOException {
 
     String token = resolveToken(request);
 
@@ -47,17 +48,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
       if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
         // Ensure roles are Spring-friendly ("ROLE_USER" instead of "USER")
+        // List<SimpleGrantedAuthority> authorities = roles.stream()
+        // .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+        // .map(SimpleGrantedAuthority::new)
+        // .toList();
+
         List<SimpleGrantedAuthority> authorities = roles.stream()
-            .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
             .map(SimpleGrantedAuthority::new)
             .toList();
 
-        UsernamePasswordAuthenticationToken authToken =
-            new UsernamePasswordAuthenticationToken(
-                username, // principal
-                null,
-                authorities
-            );
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+            username, // principal
+            null,
+            authorities);
 
         SecurityContextHolder.getContext().setAuthentication(authToken);
 

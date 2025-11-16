@@ -3,7 +3,7 @@ package com.planbana.backend.events;
 public class JoinStatusOverview {
     private String eventId;
     private String eventTitle;
-    private String status;
+    private String joinStatus;
     private String redirectToEventPage;
     private String conversationLink; // only if APPROVED
 
@@ -24,12 +24,12 @@ public class JoinStatusOverview {
         this.eventTitle = eventTitle;
     }
 
-    public String getStatus() {
-        return status;
+    public String getJoinStatus() {
+        return joinStatus;
     }
 
-    public void setStatus(String status) {
-        this.status = status;
+    public void setJoinStatus(String joinStatus) {
+        this.joinStatus = joinStatus;
     }
 
     public String getRedirectToEventPage() {
