@@ -46,6 +46,9 @@ public class SecurityConfig {
             .requestMatchers("/api/auth/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/destinations/**", "/api/events/**").permitAll()
 
+            // 🔐 Admin API
+            .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
             // ✅ Require USER role for /api/users/**
             .requestMatchers("/api/users/**").hasRole("USER")
 

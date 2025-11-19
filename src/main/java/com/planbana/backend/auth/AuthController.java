@@ -150,6 +150,13 @@ public class AuthController {
       }
 
       User u = existing.get();
+
+      // ❗ ADD THIS CHECK HERE
+      if (u.getDisabled() != null && u.getDisabled()) {
+        return ResponseEntity.status(403)
+            .body(Map.of("error", "Your account has been disabled by the admin"));
+      }
+
       if (!encoder.matches(req.password, u.getPasswordHash())) {
         return ResponseEntity.badRequest().body(Map.of("error", "Invalid password"));
       }

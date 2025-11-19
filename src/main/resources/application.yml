@@ -50,7 +50,7 @@ app:
   rateLimit:
     requestsPerMinute: ${RATE_LIMIT_RPM:100}
 
-  bootstrap-admin-phone: ${BOOTSTRAP_ADMIN_PHONE:1234567890}
+  bootstrap-admin-phone: ${BOOTSTRAP_ADMIN_PHONE:911234567890}
 
 # Firebase service account will be loaded from classpath
 firebase:

@@ -1,0 +1,251 @@
+package com.planbana.backend.admin.user;
+
+import com.planbana.backend.audit.AuditAction;
+import com.planbana.backend.audit.AuditCategory;
+import com.planbana.backend.audit.AuditLogger;
+import com.planbana.backend.user.User;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import org.springframework.data.domain.Page;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/admin/users")
+public class AdminUserController {
+
+    private final AdminUserService service;
+    private final AuditLogger auditLogger;
+
+    public AdminUserController(AdminUserService service, AuditLogger auditLogger) {
+        this.service = service;
+        this.auditLogger = auditLogger;
+    }
+
+    // ===================================================================
+    // DTOs
+    // ===================================================================
+
+    public static class UserSummary {
+        public String id;
+        public String phone;
+        public String email;
+        public String name;
+        public String displayName;
+
+        public Set<String> roles;
+        public Boolean disabled;
+
+        public User.VerificationStatus verificationStatus;
+
+        public Instant createdAt;
+
+        public static UserSummary from(User u) {
+            UserSummary s = new UserSummary();
+            s.id = u.getId();
+            s.phone = u.getPhone();
+            s.email = u.getEmail();
+            s.name = u.getName();
+            s.displayName = u.getDisplayName();
+            s.roles = u.getRoles();
+            s.disabled = u.getDisabled();
+            s.verificationStatus = u.getGovIdVerificationStatus();
+            s.createdAt = u.getCreatedAt();
+            return s;
+        }
+    }
+
+    public static class UserDetail extends UserSummary {
+
+        public String avatarUrl;
+        public String bio;
+        public List<String> languages;
+        public Set<String> hobbies;
+
+        public String gender;
+        public java.time.LocalDate birthDate;
+
+        public static UserDetail from(User u) {
+            UserDetail d = new UserDetail();
+            UserSummary base = UserSummary.from(u);
+
+            d.id = base.id;
+            d.phone = base.phone;
+            d.email = base.email;
+            d.name = base.name;
+            d.displayName = base.displayName;
+            d.roles = base.roles;
+            d.disabled = base.disabled;
+            d.verificationStatus = base.verificationStatus;
+            d.createdAt = base.createdAt;
+
+            d.avatarUrl = u.getAvatarUrl();
+            d.bio = u.getBio();
+            d.languages = u.getLanguages();
+            d.hobbies = u.getHobbies();
+            d.gender = u.getGender();
+            d.birthDate = u.getBirthDate();
+
+            return d;
+        }
+    }
+
+    // Request DTOs
+    public static class UpdateRolesRequest {
+        public Set<String> roles;
+    }
+
+    public static class UpdateVerificationRequest {
+        public User.VerificationStatus status;
+    }
+
+    public static class SetDisabledRequest {
+        public boolean disabled;
+    }
+
+    // ===================================================================
+    // Endpoints
+    // ===================================================================
+
+    @GetMapping
+    public Page<UserSummary> listUsers(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) User.VerificationStatus status,
+            Authentication auth) {
+
+        String adminId = auth.getName();
+
+        auditLogger.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.ADMIN_VIEW_USER_LIST,
+                adminId,
+                null,
+                null,
+                Map.of(
+                        "search", search,
+                        "roleFilter", role,
+                        "verificationFilter", status,
+                        "page", page,
+                        "size", size));
+
+        Page<User> results = service.searchUsers(search, page, size, role, status);
+        return results.map(UserSummary::from);
+    }
+
+    @GetMapping("/{id}")
+    public UserDetail getUser(@PathVariable String id, Authentication auth) {
+
+        String adminId = auth.getName();
+        User u = service.getUser(id);
+
+        auditLogger.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.ADMIN_VIEW_USER_DETAIL,
+                adminId,
+                u.getId(),
+                null,
+                Map.of("email", u.getEmail(), "phone", u.getPhone()));
+
+        return UserDetail.from(u);
+    }
+
+    @PatchMapping("/{id}/roles")
+    public UserDetail updateRoles(
+            @PathVariable String id,
+            @RequestBody UpdateRolesRequest req,
+            Authentication auth) {
+
+        String adminId = auth.getName();
+        User before = service.getUser(id);
+
+        User updated = service.updateRoles(id, req.roles);
+
+        auditLogger.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.ADMIN_UPDATED_USER_ROLES,
+                adminId,
+                id,
+                null,
+                Map.of(
+                        "oldRoles", before.getRoles(),
+                        "newRoles", updated.getRoles()));
+
+        return UserDetail.from(updated);
+    }
+
+    @PatchMapping("/{id}/verification")
+    public UserDetail updateVerification(
+            @PathVariable String id,
+            @RequestBody UpdateVerificationRequest req,
+            Authentication auth) {
+
+        String adminId = auth.getName();
+        User before = service.getUser(id);
+
+        User updated = service.updateVerificationStatus(id, req.status);
+
+        auditLogger.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.ADMIN_UPDATED_VERIFICATION_STATUS,
+                adminId,
+                id,
+                null,
+                Map.of(
+                        "oldStatus", before.getGovIdVerificationStatus(),
+                        "newStatus", updated.getGovIdVerificationStatus()));
+
+        return UserDetail.from(updated);
+    }
+
+    @PatchMapping("/{id}/disabled")
+    public UserDetail setDisabled(
+            @PathVariable String id,
+            @RequestBody SetDisabledRequest req,
+            Authentication auth) {
+
+        String adminId = auth.getName();
+        User before = service.getUser(id);
+
+        User updated = service.setDisabled(id, req.disabled);
+
+        auditLogger.log(
+                AuditCategory.ADMIN_USERS,
+                req.disabled ? AuditAction.ADMIN_DISABLED_USER : AuditAction.ADMIN_ENABLED_USER,
+                adminId,
+                id,
+                null,
+                Map.of(
+                        "oldDisabled", before.getDisabled(),
+                        "newDisabled", req.disabled));
+
+        return UserDetail.from(updated);
+    }
+
+    @DeleteMapping("/{id}")
+    public void deleteUser(@PathVariable String id, Authentication auth) {
+
+        String adminId = auth.getName();
+        User toDelete = service.getUser(id);
+
+        service.deleteUserHard(id);
+
+        auditLogger.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.ADMIN_DELETED_USER,
+                adminId,
+                id,
+                null,
+                Map.of(
+                        "email", toDelete.getEmail(),
+                        "phone", toDelete.getPhone(),
+                        "roles", toDelete.getRoles()));
+    }
+}

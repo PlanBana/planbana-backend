@@ -1,13 +1,15 @@
 package com.planbana.backend.events;
 
-import com.planbana.backend.events.audit.AuditLog;
-import com.planbana.backend.events.audit.AuditLogRepository;
+import com.planbana.backend.audit.AuditAction;
+import com.planbana.backend.audit.AuditCategory;
+import com.planbana.backend.audit.AuditLog;
+import com.planbana.backend.audit.AuditLogRepository;
+import com.planbana.backend.audit.AuditLogger;
+import com.planbana.backend.chat.ChatRoomService;
 import com.planbana.backend.user.User;
 import com.planbana.backend.user.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.geo.Point;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -18,11 +20,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import com.planbana.backend.chat.ChatRoomService;
-import com.planbana.backend.chat.ChatRoom;
 
 import java.time.*;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,24 +29,32 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/events")
 public class EventController {
 
-  @Autowired
-  private AuditLogRepository auditLogRepo;
-
-  @Autowired
   private final EventRepository repo;
   private final MongoTemplate mongo;
   private final UserRepository users;
+  private final ChatRoomService chatService;
+  private final AuditLogger auditLogger;
+  private final AuditLogRepository auditLogRepo; // for read endpoint
+
   private static final Logger logger = LoggerFactory.getLogger(EventController.class);
   private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Kolkata");
 
-  private final ChatRoomService chatService;
-
-  public EventController(EventRepository repo, MongoTemplate mongo, UserRepository users, ChatRoomService chatService) {
+  public EventController(
+      EventRepository repo,
+      MongoTemplate mongo,
+      UserRepository users,
+      ChatRoomService chatService,
+      AuditLogger auditLogger,
+      AuditLogRepository auditLogRepo) {
     this.repo = repo;
     this.mongo = mongo;
     this.users = users;
     this.chatService = chatService;
+    this.auditLogger = auditLogger;
+    this.auditLogRepo = auditLogRepo;
   }
+
+  // ================= DTOs =================
 
   public static class CreateEvent {
     public String title, description, imageUrl, category, pricingType, price, requirements, additionalGuidelines;
@@ -64,6 +71,8 @@ public class EventController {
       this.status = status;
     }
   }
+
+  // ================= Endpoints =================
 
   @PostMapping
   public Event create(@RequestBody CreateEvent req, Authentication auth) {
@@ -100,8 +109,30 @@ public class EventController {
     // ✅ Auto-create chatroom for this event
     chatService.createIfNotExists(e.getId(), e.getTitle(), u.getId(), e.getImageUrl());
 
-    return e;
+    // 🔐 Audit: event + user activity
+    Map<String, Object> meta = new HashMap<>();
+    meta.put("title", e.getTitle());
+    meta.put("category", e.getCategory());
+    meta.put("startAt", e.getStartAt());
+    meta.put("pricingType", e.getPricingType());
 
+    auditLogger.log(
+        AuditCategory.EVENT_LIFECYCLE,
+        AuditAction.EVENT_CREATED,
+        u.getId(),
+        null,
+        e.getId(),
+        meta);
+
+    auditLogger.log(
+        AuditCategory.USER_ACTIVITY,
+        AuditAction.USER_CREATED_EVENT,
+        u.getId(),
+        null,
+        e.getId(),
+        Map.of("title", e.getTitle()));
+
+    return e;
   }
 
   @GetMapping
@@ -115,8 +146,7 @@ public class EventController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String category,
-      @RequestParam(required = false) Boolean showCanceled // ← new param
-  ) {
+      @RequestParam(required = false) Boolean showCanceled) {
     Query query = new Query();
 
     if (q != null && !q.isBlank()) {
@@ -147,7 +177,6 @@ public class EventController {
       query.addCriteria(Criteria.where("endAt").lte(endDate));
     }
 
-    // ✅ Filter out canceled events by default
     if (!Boolean.TRUE.equals(showCanceled)) {
       query.addCriteria(Criteria.where("isCanceled").ne(true));
     }
@@ -158,11 +187,13 @@ public class EventController {
 
   @GetMapping("/{id}")
   public Map<String, Object> get(@PathVariable String id, Authentication auth) {
-    Event e = repo.findById(id).orElseThrow();
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     boolean editable = false;
     if (auth != null) {
       String currentUserId = users.findByPhone(auth.getName()).map(User::getId).orElse(null);
-      editable = e.getCreatedByUserId().equals(currentUserId) || e.getCoHostUserIds().contains(currentUserId);
+      editable = e.getCreatedByUserId().equals(currentUserId)
+          || e.getCoHostUserIds().contains(currentUserId);
     }
     return Map.of("event", e, "editableByMe", editable);
   }
@@ -174,59 +205,84 @@ public class EventController {
   }
 
   @PatchMapping("/{id}")
-  public Map<String, String> update(@PathVariable String id, @RequestBody Map<String, Object> body,
+  public Map<String, String> update(@PathVariable String id,
+      @RequestBody Map<String, Object> body,
       Authentication auth) {
-    Event e = repo.findById(id).orElseThrow();
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     User currentUser = getCurrentUser(auth);
     assertOwner(auth, e);
 
     boolean updated = false;
+    List<String> changedFields = new ArrayList<>();
+
     if (body.containsKey("title")) {
       e.setTitle((String) body.get("title"));
       updated = true;
+      changedFields.add("title");
     }
     if (body.containsKey("description")) {
       e.setDescription((String) body.get("description"));
       updated = true;
+      changedFields.add("description");
     }
     if (body.containsKey("imageUrl")) {
       e.setImageUrl((String) body.get("imageUrl"));
       updated = true;
+      changedFields.add("imageUrl");
     }
     if (body.containsKey("category")) {
       e.setCategory((String) body.get("category"));
       updated = true;
+      changedFields.add("category");
     }
     if (body.containsKey("pricingType")) {
       e.setPricingType((String) body.get("pricingType"));
       updated = true;
+      changedFields.add("pricingType");
     }
     if (body.containsKey("price")) {
       e.setPrice((String) body.get("price"));
       updated = true;
+      changedFields.add("price");
     }
     if (body.containsKey("maxParticipants")) {
       e.setMaxParticipants(Integer.parseInt(body.get("maxParticipants").toString()));
       updated = true;
+      changedFields.add("maxParticipants");
     }
     if (body.containsKey("requirements")) {
       e.setRequirements((String) body.get("requirements"));
       updated = true;
+      changedFields.add("requirements");
     }
     if (body.containsKey("additionalGuidelines")) {
       e.setAdditionalGuidelines((String) body.get("additionalGuidelines"));
       updated = true;
+      changedFields.add("additionalGuidelines");
     }
 
     repo.save(e);
 
     if (updated) {
-      auditLogRepo.save(new AuditLog(
-          e.getId(),
-          "event_updated",
+      Map<String, Object> meta = new HashMap<>();
+      meta.put("changedFields", changedFields);
+
+      auditLogger.log(
+          AuditCategory.EVENT_LIFECYCLE,
+          AuditAction.EVENT_DETAILS_UPDATED,
           currentUser.getId(),
           null,
-          Instant.now()));
+          e.getId(),
+          meta);
+
+      auditLogger.log(
+          AuditCategory.USER_ACTIVITY,
+          AuditAction.USER_UPDATED_EVENT,
+          currentUser.getId(),
+          null,
+          e.getId(),
+          meta);
     }
 
     return Map.of("message", "updated");
@@ -239,13 +295,37 @@ public class EventController {
 
     User currentUser = getCurrentUser(auth);
 
-    // 🚫 Only allow the actual host to delete
     if (!e.isHost(currentUser.getId())) {
       logger.warn("Unauthorized delete attempt by user {} on event {}", currentUser.getId(), id);
+
+      auditLogger.security(
+          AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+          currentUser.getId(),
+          Map.of(
+              "endpoint", "DELETE /api/events/" + id,
+              "reason", "non_host_delete_attempt"));
+
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host can delete this event");
     }
 
     repo.delete(e);
+
+    auditLogger.log(
+        AuditCategory.EVENT_LIFECYCLE,
+        AuditAction.EVENT_DELETED,
+        currentUser.getId(),
+        null,
+        e.getId(),
+        Map.of("reason", "host_deleted"));
+
+    auditLogger.log(
+        AuditCategory.USER_ACTIVITY,
+        AuditAction.USER_DELETED_EVENT,
+        currentUser.getId(),
+        null,
+        e.getId(),
+        Map.of());
+
     return Map.of("message", "deleted");
   }
 
@@ -260,83 +340,125 @@ public class EventController {
 
     User currentUser = getCurrentUser(auth);
 
-    // 🔒 Only host can cancel or restore
     if (!event.isHost(currentUser.getId())) {
       logger.warn("Unauthorized status update by user {} on event {}", currentUser.getId(), id);
+      auditLogger.security(
+          AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+          currentUser.getId(),
+          Map.of(
+              "endpoint", "PATCH /api/events/" + id + "/status",
+              "reason", "non_host_status_change"));
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the host can modify event status");
     }
 
-    switch (action.toLowerCase()) {
-      case "cancel":
+    String act = action.toLowerCase(Locale.ROOT);
+    switch (act) {
+      case "cancel" -> {
         if (event.isCanceled()) {
           return Map.of("message", "Event is already canceled");
         }
         event.setCanceled(true);
-        auditLogRepo.save(new AuditLog(
-            event.getId(), "event_canceled", currentUser.getId(), null));
-        break;
-
-      case "restore":
+        auditLogger.log(
+            AuditCategory.EVENT_LIFECYCLE,
+            AuditAction.EVENT_CANCELED,
+            currentUser.getId(),
+            null,
+            event.getId(),
+            Map.of("action", "cancel"));
+      }
+      case "restore" -> {
         if (!event.isCanceled()) {
           return Map.of("message", "Event is not canceled");
         }
         event.setCanceled(false);
-        auditLogRepo.save(new AuditLog(
-            event.getId(), "event_restored", currentUser.getId(), null));
-        break;
-
-      default:
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-            "Invalid action. Use 'cancel' or 'restore'");
+        auditLogger.log(
+            AuditCategory.EVENT_LIFECYCLE,
+            AuditAction.EVENT_RESTORED,
+            currentUser.getId(),
+            null,
+            event.getId(),
+            Map.of("action", "restore"));
+      }
+      default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Invalid action. Use 'cancel' or 'restore'");
     }
 
     repo.save(event);
     return Map.of("message", "Event status updated to " + action);
   }
 
-  // @GetMapping("/canceledInPast")
-  // public List<Event> getMyCanceledEvents(Authentication auth) {
-  // User currentUser = getCurrentUser(auth);
-  // return repo.findByCreatedByUserIdAndCanceledTrue(currentUser.getId());
-  // }
-
   @PostMapping("/{id}/join")
   public JoinStatusResponse requestJoin(@PathVariable String id, Authentication auth) {
     User u = getCurrentUser(auth);
-    Event e = repo.findById(id).orElseThrow();
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-    // ✅ Auto-approve if host
+    // Host auto-approve
     if (Objects.equals(e.getCreatedByUserId(), u.getId())) {
       ensureParticipant(e, u.getId());
       repo.save(e);
-
-      // ✅ Sync chatroom participants
       chatService.addParticipantIfExists(e.getId(), u.getId());
+
+      auditLogger.log(
+          AuditCategory.EVENT_JOIN,
+          AuditAction.EVENT_JOIN_APPROVED,
+          u.getId(),
+          null,
+          e.getId(),
+          Map.of("reason", "host_self_join"));
+
       return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
     }
 
-    // ✅ Already joined → ensure chatroom sync
+    // Already participant
     if (e.getParticipants().contains(u.getId())) {
       chatService.addParticipantIfExists(e.getId(), u.getId());
+
+      auditLogger.log(
+          AuditCategory.EVENT_JOIN,
+          AuditAction.EVENT_JOIN_APPROVED,
+          u.getId(),
+          null,
+          e.getId(),
+          Map.of("alreadyParticipant", true));
+
       return new JoinStatusResponse(Event.JoinStatus.APPROVED.name());
     }
 
     Event.JoinRequest existing = findJoinRequestForUser(e, u.getId());
     if (existing != null) {
+      // Already requested; don't spam logs every time
       return new JoinStatusResponse(existing.getJoinStatus().name());
     }
 
     boolean hasCapacity = e.getMaxParticipants() == null || e.getParticipants().size() < e.getMaxParticipants();
 
     if (hasCapacity) {
-      // ✅ Auto-approve if host allows instant join (optional logic)
       Event.JoinRequest jr = new Event.JoinRequest(u.getId(), Event.JoinStatus.PENDING, Instant.now());
       e.getJoinRequests().add(jr);
       repo.save(e);
+
+      auditLogger.log(
+          AuditCategory.EVENT_JOIN,
+          AuditAction.EVENT_JOIN_REQUESTED,
+          u.getId(),
+          null,
+          e.getId(),
+          Map.of("status", "PENDING"));
+
       return new JoinStatusResponse(Event.JoinStatus.PENDING.name());
     } else {
       e.getParticipantsWaitingList().add(u.getId());
       repo.save(e);
+
+      auditLogger.log(
+          AuditCategory.EVENT_JOIN,
+          AuditAction.EVENT_JOIN_WAITLISTED,
+          u.getId(),
+          null,
+          e.getId(),
+          Map.of("reason", "capacity_reached"));
+
       return new JoinStatusResponse("Participant limit reached");
     }
   }
@@ -344,21 +466,18 @@ public class EventController {
   @DeleteMapping("/{id}/leave")
   public Map<String, String> leaveEvent(@PathVariable String id, Authentication auth) {
     User user = getCurrentUser(auth);
-    Event event = repo.findById(id).orElseThrow();
+    Event event = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
     boolean modified = false;
 
-    // Remove from participants
     if (event.getParticipants().remove(user.getId())) {
       modified = true;
     }
-
-    // Remove from co-hosts
     if (event.getCoHostUserIds().remove(user.getId())) {
       modified = true;
     }
 
-    // Remove any pending join request
     List<Event.JoinRequest> updatedRequests = event.getJoinRequests()
         .stream()
         .filter(jr -> !jr.getUserId().equals(user.getId()))
@@ -368,7 +487,6 @@ public class EventController {
       modified = true;
     }
 
-    // Remove from waitlist (if exists)
     if (event.getParticipantsWaitingList() != null &&
         event.getParticipantsWaitingList().remove(user.getId())) {
       modified = true;
@@ -376,6 +494,14 @@ public class EventController {
 
     if (modified) {
       repo.save(event);
+
+      auditLogger.log(
+          AuditCategory.EVENT_JOIN,
+          AuditAction.USER_LEFT_EVENT,
+          user.getId(),
+          null,
+          event.getId(),
+          Map.of());
     }
 
     return Map.of("message", "You have left the event");
@@ -389,7 +515,7 @@ public class EventController {
     List<JoinStatusOverview> result = new ArrayList<>();
 
     for (Event e : allEvents) {
-      String status = null;
+      String status;
 
       if (e.getParticipants().contains(user.getId())) {
         status = Event.JoinStatus.APPROVED.name();
@@ -398,9 +524,8 @@ public class EventController {
             .filter(req -> req.getUserId().equals(user.getId()))
             .findFirst()
             .orElse(null);
-
         if (jr == null)
-          continue; // Skip if no join request or participation
+          continue;
         status = jr.getJoinStatus().name();
       }
 
@@ -411,9 +536,8 @@ public class EventController {
       overview.setRedirectToEventPage("/events/" + e.getId());
 
       if (Event.JoinStatus.APPROVED.name().equals(status)) {
-        overview.setConversationLink("/chat/" + e.getId()); // or actual group URL
+        overview.setConversationLink("/chat/" + e.getId());
       }
-
       result.add(overview);
     }
 
@@ -422,7 +546,8 @@ public class EventController {
 
   @GetMapping("/{id}/join/requests")
   public List<Event.JoinRequest> listJoinRequests(@PathVariable String id, Authentication auth) {
-    Event e = repo.findById(id).orElseThrow();
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     assertOwner(auth, e);
     return e.getJoinRequests();
   }
@@ -434,7 +559,8 @@ public class EventController {
       @RequestParam String action,
       Authentication auth) {
 
-    Event e = repo.findById(id).orElseThrow();
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     User currentUser = getCurrentUser(auth);
     assertOwner(auth, e);
 
@@ -465,12 +591,26 @@ public class EventController {
 
     repo.save(e);
 
-    auditLogRepo.save(new AuditLog(
-        e.getId(),
-        "join_status_" + (newStatus != null ? newStatus.name().toLowerCase() : "cleared"),
+    AuditAction auditAction;
+    if (newStatus == Event.JoinStatus.APPROVED) {
+      auditAction = AuditAction.EVENT_JOIN_APPROVED;
+    } else if (newStatus == Event.JoinStatus.REJECTED) {
+      auditAction = AuditAction.EVENT_JOIN_REJECTED;
+    } else if (newStatus == Event.JoinStatus.WAITLISTED) {
+      auditAction = AuditAction.EVENT_JOIN_WAITLISTED;
+    } else if (newStatus == Event.JoinStatus.PENDING) {
+      auditAction = AuditAction.EVENT_JOIN_REQUESTED;
+    } else {
+      auditAction = AuditAction.EVENT_JOIN_CANCELLED;
+    }
+
+    auditLogger.log(
+        AuditCategory.EVENT_JOIN,
+        auditAction,
         currentUser.getId(),
         userId,
-        Instant.now()));
+        e.getId(),
+        Map.of("newStatus", newStatus != null ? newStatus.name() : "NONE"));
 
     return Map.of(
         "message", "updated",
@@ -490,9 +630,16 @@ public class EventController {
 
     User currentUser = getCurrentUser(auth);
 
-    // ✅ Allow only host to view total likes
     if (!e.isHost(currentUser.getId())) {
       logger.warn("Unauthorized attempt to view likes by user {} on event {}", currentUser.getId(), id);
+
+      auditLogger.security(
+          AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+          currentUser.getId(),
+          Map.of(
+              "endpoint", "GET /api/events/" + id + "/likes",
+              "reason", "non_host_view_likes"));
+
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host can view likes");
     }
 
@@ -506,7 +653,7 @@ public class EventController {
   public List<Event> getLikedEventsForUser(Authentication auth) {
     User user = getCurrentUser(auth);
 
-    List<Event> allEvents = repo.findAll(); // or optimize with custom query if needed
+    List<Event> allEvents = repo.findAll();
     return allEvents.stream()
         .filter(e -> !e.isCanceled())
         .filter(e -> e.getLikedByUserIds().contains(user.getId()))
@@ -516,16 +663,18 @@ public class EventController {
   @PostMapping("/{id}/likes")
   public Map<String, Object> like(@PathVariable String id, Authentication auth) {
     User user = getCurrentUser(auth);
-    Event event = repo.findById(id).orElseThrow();
+    Event event = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
     boolean added = event.like(user.getId());
     if (added) {
-      auditLogRepo.save(new AuditLog(
-          event.getId(),
-          "event_liked",
+      auditLogger.log(
+          AuditCategory.EVENT_LIKE,
+          AuditAction.EVENT_LIKED,
           user.getId(),
           null,
-          Instant.now()));
+          event.getId(),
+          Map.of("newCount", event.getLikeCount()));
     }
 
     repo.save(event);
@@ -543,16 +692,18 @@ public class EventController {
   @DeleteMapping("/{id}/likes")
   public Map<String, Object> unlike(@PathVariable String id, Authentication auth) {
     User user = getCurrentUser(auth);
-    Event event = repo.findById(id).orElseThrow();
+    Event event = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
     boolean removed = event.unlike(user.getId());
     if (removed) {
-      auditLogRepo.save(new AuditLog(
-          event.getId(),
-          "event_unliked",
+      auditLogger.log(
+          AuditCategory.EVENT_LIKE,
+          AuditAction.EVENT_UNLIKED,
           user.getId(),
           null,
-          Instant.now()));
+          event.getId(),
+          Map.of("newCount", event.getLikeCount()));
     }
 
     repo.save(event);
@@ -568,13 +719,24 @@ public class EventController {
   }
 
   @PostMapping("/{id}/cohosts/{userId}")
-  public Map<String, String> updateCoHost(@PathVariable String id, @PathVariable String userId,
-      @RequestParam String action, Authentication auth) {
-    Event e = repo.findById(id).orElseThrow();
+  public Map<String, String> updateCoHost(@PathVariable String id,
+      @PathVariable String userId,
+      @RequestParam String action,
+      Authentication auth) {
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     User currentUser = getCurrentUser(auth);
 
     if (!e.isHost(currentUser.getId())) {
       logger.warn("Unauthorized co-host modification by non-host: {}", currentUser.getId());
+
+      auditLogger.security(
+          AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+          currentUser.getId(),
+          Map.of(
+              "endpoint", "POST /api/events/" + id + "/cohosts/" + userId,
+              "reason", "non_host_cohost_management"));
+
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host can manage co-hosts");
     }
 
@@ -587,18 +749,17 @@ public class EventController {
       repo.save(e);
 
       if (added) {
-        auditLogRepo.save(new AuditLog(
-            e.getId(),
-            "cohost_added",
+        auditLogger.log(
+            AuditCategory.EVENT_COHOSTS,
+            AuditAction.EVENT_COHOST_ADDED,
             currentUser.getId(),
             userId,
-            Instant.now()));
+            e.getId(),
+            Map.of());
       }
 
       return Map.of("message", added ? "co-host added" : "already a co-host");
-    }
-
-    else if ("remove".equalsIgnoreCase(action)) {
+    } else if ("remove".equalsIgnoreCase(action)) {
       if (e.isHost(userId)) {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Host cannot be removed");
       }
@@ -606,12 +767,13 @@ public class EventController {
       repo.save(e);
 
       if (removed) {
-        auditLogRepo.save(new AuditLog(
-            e.getId(),
-            "cohost_removed",
+        auditLogger.log(
+            AuditCategory.EVENT_COHOSTS,
+            AuditAction.EVENT_COHOST_REMOVED,
             currentUser.getId(),
             userId,
-            Instant.now()));
+            e.getId(),
+            Map.of());
       }
 
       return Map.of("message", removed ? "co-host removed" : "user was not a co-host");
@@ -624,36 +786,40 @@ public class EventController {
   public List<Map<String, Object>> getEventParticipants(
       @PathVariable String id,
       Authentication auth) {
-    Event e = repo.findById(id).orElseThrow();
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     User currentUser = getCurrentUser(auth);
 
     boolean isHost = e.isHost(currentUser.getId());
     boolean isCoHost = e.isCoHost(currentUser.getId());
     boolean isParticipant = e.getParticipants().contains(currentUser.getId());
 
-    // 🚫 Restrict visibility: only host, co-host, or participant
     if (!isHost && !isCoHost && !isParticipant) {
+      auditLogger.security(
+          AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+          currentUser.getId(),
+          Map.of(
+              "endpoint", "GET /api/events/" + id + "/participants",
+              "reason", "not_host_or_participant"));
+
       throw new ResponseStatusException(HttpStatus.FORBIDDEN,
           "You must be a host or participant to view attendees.");
     }
 
-    // ✅ Return public info of approved participants
     return e.getParticipants().stream()
         .map(uid -> users.findById(uid))
         .filter(Optional::isPresent)
-        .map(opt -> opt.get()) // use explicit lambda
+        .map(Optional::get)
         .map(u -> {
           Map<String, Object> map = new HashMap<>();
           map.put("id", u.getId());
           String name = Optional.ofNullable(u.getDisplayName())
-              .orElse(Optional.ofNullable(u.getName())
-                  .orElse("Unnamed"));
+              .orElse(Optional.ofNullable(u.getName()).orElse("Unnamed"));
           map.put("name", name);
           map.put("profileImage", u.getAvatarUrl());
           return map;
         })
-        .collect(Collectors.toList()); // ✅ works in all Java versions
-
+        .collect(Collectors.toList());
   }
 
   @DeleteMapping("/{eventId}/participants/{userId}")
@@ -663,13 +829,22 @@ public class EventController {
       Authentication auth) {
 
     User currentUser = getCurrentUser(auth);
-    Event event = repo.findById(eventId).orElseThrow();
+    Event event = repo.findById(eventId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
     boolean isHost = event.isHost(currentUser.getId());
     boolean isCoHost = event.isCoHost(currentUser.getId());
 
     if (!isHost && !isCoHost) {
       logger.warn("Unauthorized removal attempt by {} on event {}", currentUser.getId(), event.getId());
+
+      auditLogger.security(
+          AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+          currentUser.getId(),
+          Map.of(
+              "endpoint", "DELETE /api/events/" + eventId + "/participants/" + userId,
+              "reason", "not_host_or_cohost"));
+
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only host or co-host can remove participants");
     }
 
@@ -687,11 +862,9 @@ public class EventController {
     if (event.getParticipants().remove(userId)) {
       changed = true;
     }
-
     if (isHost && event.getCoHostUserIds().remove(userId)) {
       changed = true;
     }
-
     if (event.getParticipantsWaitingList() != null &&
         event.getParticipantsWaitingList().remove(userId)) {
       changed = true;
@@ -708,30 +881,29 @@ public class EventController {
 
     if (changed) {
       repo.save(event);
-      auditLogRepo.save(new AuditLog(
-          event.getId(),
-          "participant_removed",
+
+      auditLogger.log(
+          AuditCategory.EVENT_PARTICIPANTS,
+          AuditAction.EVENT_PARTICIPANT_REMOVED,
           currentUser.getId(),
           userId,
-          Instant.now()));
+          event.getId(),
+          Map.of("byHost", isHost, "byCoHost", isCoHost));
     }
 
     return Map.of("message", "Participant removed");
   }
 
-  // Deeplink
-
   @GetMapping("/{id}/share")
   public Map<String, String> getEventShareLink(@PathVariable String id, Authentication auth) {
-    // Optional: If you only want logged-in users to access this
     if (auth == null || !auth.isAuthenticated()) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required to generate share link");
     }
 
-    Event e = repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+    Event e = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-    // Basic event share URL - frontend should have routing logic to handle it
-    String frontendBaseUrl = "https://planbana.com/events/"; // move to application.properties for config
+    String frontendBaseUrl = "https://planbana.com/events/";
     String shareUrl = frontendBaseUrl + e.getId();
 
     return Map.of("shareUrl", shareUrl);
@@ -740,9 +912,9 @@ public class EventController {
   @GetMapping("/{id}/statistics")
   public Map<String, Object> getEventStats(@PathVariable String id, Authentication auth) {
     User currentUser = getCurrentUser(auth);
-    Event event = repo.findById(id).orElseThrow();
+    Event event = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-    // ❗ Host-only access
     if (!event.isHost(currentUser.getId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the event host can access statistics.");
     }
@@ -766,7 +938,8 @@ public class EventController {
   @GetMapping("/{id}/audit-logs")
   public List<AuditLog> getAuditLogs(@PathVariable String id, Authentication auth) {
     User currentUser = getCurrentUser(auth);
-    Event event = repo.findById(id).orElseThrow();
+    Event event = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
     if (!event.isHost(currentUser.getId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only hosts can view audit logs.");
@@ -775,20 +948,28 @@ public class EventController {
     return auditLogRepo.findByEventIdOrderByTimestampDesc(event.getId());
   }
 
-  // BookMark APIs
+  // ===== Bookmarks =====
 
   @PostMapping("/{id}/bookmark")
   public Map<String, String> bookmarkEvent(@PathVariable String id, Authentication auth) {
     User user = getCurrentUser(auth);
-    Event event = repo.findById(id).orElseThrow();
+    Event event = repo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
     user.getBookmarkedEventIds().add(event.getId());
     users.save(user);
 
+    auditLogger.log(
+        AuditCategory.USER_ACTIVITY,
+        AuditAction.USER_BOOKMARKED_EVENT,
+        user.getId(),
+        null,
+        event.getId(),
+        Map.of());
+
     return Map.of("message", "Event bookmarked");
   }
 
-  // Get Bookmarked Events
   @GetMapping("/bookmarks")
   public List<Event> getBookmarkedEvents(Authentication auth) {
     User user = getCurrentUser(auth);
@@ -802,13 +983,21 @@ public class EventController {
         .collect(Collectors.toList());
   }
 
-  // Remove Bookmark
   @DeleteMapping("/{id}/bookmark")
   public Map<String, String> removeBookmark(@PathVariable String id, Authentication auth) {
     User user = getCurrentUser(auth);
 
     if (user.getBookmarkedEventIds().remove(id)) {
       users.save(user);
+
+      auditLogger.log(
+          AuditCategory.USER_ACTIVITY,
+          AuditAction.USER_REMOVED_BOOKMARK,
+          user.getId(),
+          null,
+          id,
+          Map.of());
+
       return Map.of("message", "Bookmark removed");
     }
 
@@ -818,7 +1007,11 @@ public class EventController {
   // --- Helpers ---
 
   private User getCurrentUser(Authentication auth) {
-    return users.findByPhone(auth.getName()).orElseThrow();
+    if (auth == null || auth.getName() == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+    }
+    return users.findByPhone(auth.getName())
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
   }
 
   private void assertOwner(Authentication auth, Event e) {
@@ -826,6 +1019,14 @@ public class EventController {
     if (!Objects.equals(e.getCreatedByUserId(), u.getId()) &&
         (e.getCoHostUserIds() == null || !e.getCoHostUserIds().contains(u.getId()))) {
       logger.warn("Unauthorized access attempt by {} on event {}", u.getId(), e.getId());
+
+      auditLogger.security(
+          AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+          u.getId(),
+          Map.of(
+              "endpoint", "EVENT_OWNER_CHECK",
+              "eventId", e.getId()));
+
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized");
     }
   }
@@ -844,100 +1045,6 @@ public class EventController {
     }
     return null;
   }
-
-  // private static Event.JoinRequest findOrCreateJoinRequest(Event e, String
-  // userId) {
-  // Event.JoinRequest jr = findJoinRequestForUser(e, userId);
-  // if (jr == null) {
-  // jr = new Event.JoinRequest(userId, Event.JoinStatus.PENDING, Instant.now());
-  // e.getJoinRequests().add(jr);
-  // }
-  // return jr;
-  // }
-
-  // private void assertAdmin(Authentication auth, Event e) {
-  // User u = getCurrentUser(auth);
-  // if (!Objects.equals(e.getCreatedByUserId(), u.getId()) &&
-  // (e.getCoHostUserIds() == null || !e.getCoHostUserIds().contains(u.getId())))
-  // {
-  // throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not event owner or
-  // co-host");
-  // }
-  // }
-
-  // private void approveUser(Event e, String userId) {
-  // boolean hasCapacity = e.getMaxParticipants() == null ||
-  // e.getParticipants().size() < e.getMaxParticipants();
-  // if (!hasCapacity) {
-  // throw new ResponseStatusException(HttpStatus.CONFLICT, "Event is at
-  // capacity");
-  // }
-  // Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
-  // jr.setStatus(Event.JoinStatus.APPROVED);
-  // if (jr.getRequestedAt() == null)
-  // jr.setRequestedAt(Instant.now());
-  // e.getParticipants().add(userId);
-  // }
-
-  // private void rejectUser(Event e, String userId) {
-  // Event.JoinRequest jr = findOrCreateJoinRequest(e, userId);
-  // jr.setStatus(Event.JoinStatus.REJECTED);
-  // if (jr.getRequestedAt() == null)
-  // jr.setRequestedAt(Instant.now());
-  // e.getParticipants().remove(userId);
-  // }
-
-  // // ===== Date/Time helpers (NEW) =====
-
-  // private static Instant buildInstantFromUi(String dateStr, String timeStr) {
-  // // Remove ordinal suffixes: 1st/2nd/3rd/4th → 1/2/3/4
-  // String normalizedDate = dateStr
-  // .replaceAll("(?i)(\\d+)(st|nd|rd|th)", "$1")
-  // .trim();
-
-  // // Example: "September 10, 2025"
-  // DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("MMMM d, uuuu",
-  // Locale.ENGLISH);
-
-  // // Example: "11:55am" / "3pm"
-  // // Handle optional minutes
-  // String normalizedTime = timeStr.toUpperCase(Locale.ROOT).replaceAll("\\s+",
-  // "");
-  // DateTimeFormatter timeFmt = normalizedTime.contains(":")
-  // ? DateTimeFormatter.ofPattern("h:mma", Locale.ENGLISH)
-  // : DateTimeFormatter.ofPattern("ha", Locale.ENGLISH);
-
-  // LocalDate date = LocalDate.parse(normalizedDate, dateFmt);
-  // LocalTime time = LocalTime.parse(normalizedTime, timeFmt);
-
-  // ZonedDateTime zdt = ZonedDateTime.of(date, time, DEFAULT_ZONE);
-  // return zdt.toInstant();
-  // }
-
-  // private static Instant addDuration(Instant start, String durationStr) {
-  // if (durationStr == null || durationStr.isBlank()) {
-  // // Default to 1 hour if not provided
-  // return start.plus(Duration.ofHours(1));
-  // }
-  // String s = durationStr.trim().toLowerCase(Locale.ROOT);
-  // // Try "90 minutes", "90 min", "1 hour", "2 hours"
-  // long minutes = 0;
-  // if (s.contains("hour")) {
-  // // extract first number
-  // long hours = extractLeadingNumber(s);
-  // minutes = hours * 60;
-  // } else if (s.contains("min")) {
-  // minutes = extractLeadingNumber(s);
-  // } else {
-  // // fallback: treat as minutes if just a number
-  // try {
-  // minutes = Long.parseLong(s);
-  // } catch (Exception ignored) {
-  // minutes = 60;
-  // }
-  // }
-  // return start.plus(Duration.ofMinutes(minutes > 0 ? minutes : 60));
-  // }
 
   private static long extractLeadingNumber(String s) {
     var m = java.util.regex.Pattern.compile("(\\d+)").matcher(s);
