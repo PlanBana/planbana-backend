@@ -9,47 +9,50 @@ public class SystemSettings {
     @Id
     private String id = "GLOBAL"; // Singleton document
 
-    // ===========================
+    // ================================
     // Maintenance Mode
-    // ===========================
+    // ================================
     private boolean maintenanceMode = false;
     private String maintenanceMessage = "The system is under maintenance.";
 
-    // Global announcement (visible across app)
+    // Global announcement displayed across the app
     private String globalAnnouncement = "";
 
-    // ===========================
+    // ================================
     // Limits
-    // ===========================
+    // ================================
     private int maxEventParticipants = 50;
     private int maxEventsPerUser = 20;
     private int eventImageMaxSizeMb = 10; // MB
 
-    // ===========================
-    // Moderation
-    // ===========================
+    // ================================
+    // Moderation Settings
+    // ================================
     private boolean autoBlockFlaggedEvents = false;
     private int maxReportsBeforeBlock = 5;
 
-    // ===========================
+    // ================================
     // Feature Flags
-    // ===========================
+    // ================================
     private boolean enableEventChat = true;
     private boolean enablePushNotifications = true;
     private boolean enableUserRegistration = true;
     private boolean allowGuestLogin = false;
 
-    // ===========================
+    // ================================
     // Admin Notifications
-    // ===========================
+    // ================================
     private boolean adminEmailNotificationsEnabled = true;
 
-    // ===== Getters & Setters =====
+    // ================================
+    // Getters & Setters
+    // ================================
 
     public String getId() {
         return id;
     }
 
+    // Maintenance Mode
     public boolean isMaintenanceMode() {
         return maintenanceMode;
     }
@@ -66,6 +69,7 @@ public class SystemSettings {
         this.maintenanceMessage = maintenanceMessage;
     }
 
+    // Announcement
     public String getGlobalAnnouncement() {
         return globalAnnouncement;
     }
@@ -74,6 +78,7 @@ public class SystemSettings {
         this.globalAnnouncement = globalAnnouncement;
     }
 
+    // Limits
     public int getMaxEventParticipants() {
         return maxEventParticipants;
     }
@@ -98,6 +103,7 @@ public class SystemSettings {
         this.eventImageMaxSizeMb = eventImageMaxSizeMb;
     }
 
+    // Moderation
     public boolean isAutoBlockFlaggedEvents() {
         return autoBlockFlaggedEvents;
     }
@@ -114,6 +120,7 @@ public class SystemSettings {
         this.maxReportsBeforeBlock = maxReportsBeforeBlock;
     }
 
+    // Feature Flags
     public boolean isEnableEventChat() {
         return enableEventChat;
     }
@@ -146,6 +153,7 @@ public class SystemSettings {
         this.allowGuestLogin = allowGuestLogin;
     }
 
+    // Admin Email Notifications
     public boolean isAdminEmailNotificationsEnabled() {
         return adminEmailNotificationsEnabled;
     }

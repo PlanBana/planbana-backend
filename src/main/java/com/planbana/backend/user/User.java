@@ -4,6 +4,7 @@ import com.planbana.backend.common.BaseEntity;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -334,6 +335,46 @@ public class User extends BaseEntity {
 
   public void setBookmarkedEventIds(Set<String> bookmarkedEventIds) {
     this.bookmarkedEventIds = bookmarkedEventIds == null ? new HashSet<>() : bookmarkedEventIds;
+  }
+
+  // ============================
+  // Moderation Fields
+  // ============================
+  private String disabledReason;
+  private Instant disabledAt;
+
+  // Admin Notes (multiple)
+  private List<AdminNote> adminNotes = new ArrayList<>();
+
+  public String getDisabledReason() {
+    return disabledReason;
+  }
+
+  public void setDisabledReason(String disabledReason) {
+    this.disabledReason = disabledReason;
+  }
+
+  public Instant getDisabledAt() {
+    return disabledAt;
+  }
+
+  public void setDisabledAt(Instant disabledAt) {
+    this.disabledAt = disabledAt;
+  }
+
+  public List<AdminNote> getAdminNotes() {
+    return adminNotes;
+  }
+
+  public void setAdminNotes(List<AdminNote> adminNotes) {
+    this.adminNotes = adminNotes;
+  }
+
+  public static class AdminNote {
+    public String id;
+    public String adminId;
+    public String note;
+    public Instant createdAt = Instant.now();
   }
 
 }

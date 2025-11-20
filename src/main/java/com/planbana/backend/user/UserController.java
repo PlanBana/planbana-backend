@@ -11,6 +11,10 @@ import com.planbana.backend.storage.FileStorageService;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 
+import com.planbana.backend.audit.AuditLogger;
+import com.planbana.backend.audit.AuditAction;
+import com.planbana.backend.audit.AuditCategory;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -22,10 +26,14 @@ public class UserController {
 
   private final UserRepository repo;
   private final FileStorageService storageService;
+  private final AuditLogger auditLogger;
 
-  public UserController(UserRepository repo, FileStorageService storageService) {
+  public UserController(UserRepository repo,
+      FileStorageService storageService,
+      AuditLogger auditLogger) {
     this.repo = repo;
     this.storageService = storageService;
+    this.auditLogger = auditLogger;
   }
 
   @GetMapping("/me")
@@ -91,6 +99,15 @@ public class UserController {
       u.setHobbies(req.hobbies);
 
     repo.save(u);
+
+    auditLogger.log(
+        AuditCategory.USER_PROFILE,
+        AuditAction.USER_PROFILE_UPDATED,
+        u.getId(),
+        null,
+        null,
+        Map.of("changedFields", req));
+
     return Map.of("message", "Profile updated");
   }
 
@@ -109,6 +126,14 @@ public class UserController {
       String avatarUrl = storageService.saveAvatar(file, u.getId());
       u.setAvatarUrl(avatarUrl);
       repo.save(u);
+
+      auditLogger.log(
+          AuditCategory.USER_PROFILE,
+          AuditAction.USER_PROFILE_UPDATED,
+          u.getId(),
+          null,
+          null,
+          Map.of("avatarUrl", avatarUrl));
 
       // ✅ Always return JSON response body
       return ResponseEntity.ok(Map.of("avatarUrl", avatarUrl));
@@ -155,6 +180,15 @@ public class UserController {
     if (current == User.VerificationStatus.UNVERIFIED || current == User.VerificationStatus.REJECTED) {
       u.setGovIdVerificationStatus(User.VerificationStatus.PENDING);
       repo.save(u);
+
+      auditLogger.log(
+          AuditCategory.USER_ACCOUNT,
+          AuditAction.USER_GOV_ID_SUBMITTED,
+          u.getId(),
+          null,
+          null,
+          Map.of("status", "PENDING"));
+
     }
     return Map.of("status", u.getGovIdVerificationStatus().name());
   }
@@ -208,6 +242,14 @@ public class UserController {
     target.upsertRating(rater.getId(), body.value);
     repo.save(target);
 
+    auditLogger.log(
+        AuditCategory.USER_ACTIVITY,
+        AuditAction.USER_PROFILE_UPDATED,
+        rater.getId(),
+        target.getId(),
+        null,
+        Map.of("rating", body.value));
+
     return Map.of(
         "message", "rating upserted",
         "userId", target.getId(),
@@ -233,10 +275,50 @@ public class UserController {
     target.removeRating(rater.getId());
     repo.save(target);
 
+    auditLogger.log(
+        AuditCategory.USER_ACTIVITY,
+        AuditAction.USER_PROFILE_UPDATED,
+        rater.getId(),
+        target.getId(),
+        null,
+        Map.of("removedRating", true));
+
     return Map.of(
         "message", "rating removed",
         "userId", target.getId(),
         "average", target.getRatingAverage(),
         "count", target.getRatingCount());
   }
+
+  // ============================================================
+  // (ADMIN SIDE CODE WILL SET VERIFIED or REJECTED)
+  // ============================================================
+  public void kycVerified(User u) {
+    User.VerificationStatus old = u.getGovIdVerificationStatus();
+    u.setGovIdVerificationStatus(User.VerificationStatus.VERIFIED);
+    repo.save(u);
+
+    auditLogger.log(
+        AuditCategory.USER_ACCOUNT,
+        AuditAction.USER_GOV_ID_VERIFIED,
+        u.getId(),
+        null,
+        null,
+        Map.of("oldStatus", old.name(), "newStatus", "VERIFIED"));
+  }
+
+  public void kycRejected(User u, String reason) {
+    User.VerificationStatus old = u.getGovIdVerificationStatus();
+    u.setGovIdVerificationStatus(User.VerificationStatus.REJECTED);
+    repo.save(u);
+
+    auditLogger.log(
+        AuditCategory.USER_ACCOUNT,
+        AuditAction.USER_GOV_ID_REJECTED,
+        u.getId(),
+        null,
+        null,
+        Map.of("oldStatus", old.name(), "newStatus", "REJECTED", "reason", reason));
+  }
+
 }

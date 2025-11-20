@@ -15,7 +15,6 @@ public interface UserRepository extends MongoRepository<User, String>, UserAdmin
 
   boolean existsByPhone(String phone);
 
-  // --- for role & verification management ---
   boolean existsByRolesContaining(String role);
 
   long countByRolesContaining(String role);
@@ -26,8 +25,11 @@ public interface UserRepository extends MongoRepository<User, String>, UserAdmin
 
   long countByCreatedAtAfter(Instant date);
 
+  // ✅ Add missing functions
+  long countByCreatedAtBetween(Instant start, Instant end);
+
   List<User> findAllByGovIdVerificationStatus(User.VerificationStatus status);
 
-  // You can refine these later; for now, a simple all-users page:
-  // Page<User> findAll(Pageable pageable);
+  // For dashboard leaderboard: Top newest users
+  List<User> findTop10ByOrderByCreatedAtDesc();
 }

@@ -36,6 +36,11 @@ public interface EventRepository extends MongoRepository<Event, String> {
 
     long countByStatus(Event.Status status);
 
+    long countByCreatedAtBetween(Instant start, Instant end);
+
+    // This is used in /top-users endpoint
+    long countByCreatedByUserId(String userId);
+
     Page<Event> findByStatus(Event.Status status, Pageable pageable);
 
 }

@@ -1,0 +1,41 @@
+
+
+Use of Moderation folder ✅
+
+It is system-level logic that runs:
+
+When users report events
+
+When events are created (spam detection)
+
+When KYC is submitted
+
+When AI flags suspicious behavior
+
+When background cron jobs run
+
+When thresholds are reached (auto-block, auto-hide)
+
+Even though:
+
+Admins view the results
+
+Admin dashboard displays moderation actions
+------------------------------------------------------------
+
+
+(AdminReportsController)
+
+This will give admins:
+
+✔ View all reports (pending / reviewed / action taken)
+✔ Filter reports
+✔ Review a report
+✔ Take moderation action (block event, hide event, warn user, etc.)
+✔ Assign a moderator
+✔ Audit-log everything
+
+This uses the earlier EventReportService, EventReport, and AutoModerationService.
+
+
+

@@ -1,13 +1,14 @@
 package com.planbana.backend.admin.audit;
 
-import com.planbana.backend.events.audit.AuditLog;
-import com.planbana.backend.events.audit.AuditLogRepository;
+import com.planbana.backend.audit.AuditAction;
+import com.planbana.backend.audit.AuditCategory;
+import com.planbana.backend.audit.AuditLog;
+import com.planbana.backend.audit.AuditLogRepository;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.data.domain.*;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/audit")
@@ -19,57 +20,75 @@ public class AdminAuditLogController {
         this.auditRepo = auditRepo;
     }
 
-    // ==============================================================
-    // 1. GET ALL AUDIT LOGS (paged)
-    // ==============================================================
-
+    // ============================================================
+    // 1. GET ALL LOGS (paged + sortable)
+    // ============================================================
     @GetMapping
     public Page<AuditLog> getAll(
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "30") @Min(1) @Max(200) int size,
             @RequestParam(defaultValue = "timestamp") String sortBy,
             @RequestParam(defaultValue = "DESC") Sort.Direction direction) {
+
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
         return auditRepo.findAll(pageable);
     }
 
-    // ==============================================================
-    // 2. GET AUDIT LOGS FOR A SINGLE EVENT
-    // ==============================================================
+    // ============================================================
+    // 2. FILTER BY CATEGORY (enum)
+    // ============================================================
+    @GetMapping("/category")
+    public Page<AuditLog> getByCategory(
+            @RequestParam AuditCategory category,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "30") @Min(1) @Max(200) int size) {
 
-    @GetMapping("/event/{eventId}")
-    public Map<String, Object> getByEvent(@PathVariable String eventId) {
-        return Map.of(
-                "eventId", eventId,
-                "logs", auditRepo.findByEventIdOrderByTimestampDesc(eventId));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"));
+        return auditRepo.findByCategory(category, pageable);
     }
 
-    // ==============================================================
-    // 3. SEARCH AUDIT LOGS BY ACTION TYPE
-    // ==============================================================
+    // ============================================================
+    // 3. FILTER BY ACTION (enum) — proper repository support
+    // ============================================================
 
     @GetMapping("/action")
     public Page<AuditLog> getByAction(
-            @RequestParam String action,
+            @RequestParam AuditAction action,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(200) int size) {
+            @RequestParam(defaultValue = "30") @Min(1) @Max(200) int size) {
+
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"));
 
-        // Mongo regex search
-        return auditRepo.findByActionRegexIgnoreCase(action, pageable);
+        return auditRepo.findByAction(action, pageable);
     }
 
-    // ==============================================================
-    // 4. GET AUDIT LOGS PERFORMED BY A SPECIFIC ADMIN
-    // ==============================================================
+    // ============================================================
+    // 4. FILTER BY EVENT ID
+    // ============================================================
 
-    @GetMapping("/performed-by/{adminId}")
-    public Page<AuditLog> getByAdmin(
-            @PathVariable String adminId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+    @GetMapping("/event/{eventId}")
+    public Page<AuditLog> getByEvent(
+            @PathVariable String eventId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "30") @Min(1) @Max(200) int size) {
+
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"));
 
-        return auditRepo.findByPerformedBy(adminId, pageable);
+        return auditRepo.findByEventId(eventId, pageable);
+    }
+
+    // ============================================================
+    // 5. FILTER BY PERFORMED-BY USER ID (admin/moderator)
+    // ============================================================
+
+    @GetMapping("/performed-by/{userId}")
+    public Page<AuditLog> getByPerformedBy(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "30") @Min(1) @Max(200) int size) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"));
+
+        return auditRepo.findByPerformedBy(userId, pageable);
     }
 }

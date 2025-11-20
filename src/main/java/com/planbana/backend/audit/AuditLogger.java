@@ -1,10 +1,11 @@
 package com.planbana.backend.audit;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.Map;
 
-@Service
+@Component
 public class AuditLogger {
 
     private final AuditLogRepository repo;
@@ -13,7 +14,12 @@ public class AuditLogger {
         this.repo = repo;
     }
 
-    public void log(AuditCategory category,
+    // ============================================================
+    // MAIN log() — matches your AuditLog constructor EXACTLY
+    // ============================================================
+
+    public void log(
+            AuditCategory category,
             AuditAction action,
             String performedBy,
             String targetUser,
@@ -28,21 +34,73 @@ public class AuditLogger {
                 eventId,
                 meta);
 
+        // timestamp already assigned inside constructor
         repo.save(log);
     }
 
-    // Convenience wrappers (optional – use or ignore)
-    public void event(AuditAction action,
+    // ============================================================
+    // Overload without meta
+    // ============================================================
+
+    public void log(
+            AuditCategory category,
+            AuditAction action,
             String performedBy,
             String targetUser,
-            String eventId,
-            Map<String, Object> meta) {
-        log(AuditCategory.EVENT_LIFECYCLE, action, performedBy, targetUser, eventId, meta);
+            String eventId) {
+        log(category, action, performedBy, targetUser, eventId, Map.of());
     }
 
-    public void security(AuditAction action,
+    // ============================================================
+    // SECURITY logs (auto-category)
+    // ============================================================
+
+    public void security(
+            AuditAction action,
             String performedBy,
             Map<String, Object> meta) {
-        log(AuditCategory.SECURITY_AUTH, action, performedBy, null, null, meta);
+
+        AuditLog log = new AuditLog(
+                AuditCategory.SECURITY_AUTH,
+                action,
+                performedBy,
+                null,
+                null,
+                meta);
+
+        repo.save(log);
     }
+
+    public void security(
+            AuditAction action,
+            String performedBy) {
+        security(action, performedBy, Map.of());
+    }
+
+    // ============================================================
+    // SYSTEM logs (auto-category)
+    // ============================================================
+
+    public void system(
+            AuditAction action,
+            String performedBy,
+            Map<String, Object> meta) {
+
+        AuditLog log = new AuditLog(
+                AuditCategory.SYSTEM_SETTINGS,
+                action,
+                performedBy,
+                null,
+                null,
+                meta);
+
+        repo.save(log);
+    }
+
+    public void system(
+            AuditAction action,
+            String performedBy) {
+        system(action, performedBy, Map.of());
+    }
+
 }
