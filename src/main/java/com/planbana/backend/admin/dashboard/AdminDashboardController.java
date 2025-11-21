@@ -1,5 +1,6 @@
 package com.planbana.backend.admin.dashboard;
 
+import com.planbana.backend.audit.AuditAction;
 import com.planbana.backend.audit.AuditLog;
 import com.planbana.backend.audit.AuditLogRepository;
 import com.planbana.backend.events.Event;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.*;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.IsoFields;
+import java.time.temporal.WeekFields;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -405,4 +408,292 @@ public class AdminDashboardController {
             this.count++;
         }
     }
+
+    // 👇👇👇👇
+    // ============================================================
+    // 12. RETENTION SUMMARY (D1 / D7 / D30)
+    // ============================================================
+
+    @GetMapping("/retention/summary")
+    public Map<String, Object> retentionSummary() {
+
+        Instant now = Instant.now();
+        Instant dayAgo = now.minus(1, ChronoUnit.DAYS);
+        Instant weekAgo = now.minus(7, ChronoUnit.DAYS);
+        Instant monthAgo = now.minus(30, ChronoUnit.DAYS);
+
+        // FIXED — Added missing repo method
+        List<User> newUsers = userRepo.findByCreatedAtAfter(monthAgo);
+
+        List<AuditLog> logs = auditLogRepo.findByTimestampBetween(monthAgo, now);
+
+        Set<String> active1d = logs.stream()
+                .filter(l -> l.getTimestamp().isAfter(dayAgo))
+                .map(AuditLog::getPerformedBy)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<String> active7d = logs.stream()
+                .filter(l -> l.getTimestamp().isAfter(weekAgo))
+                .map(AuditLog::getPerformedBy)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<String> active30d = logs.stream()
+                .map(AuditLog::getPerformedBy)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        long totalNew = newUsers.size();
+        long d1 = newUsers.stream().filter(u -> active1d.contains(u.getId())).count();
+        long d7 = newUsers.stream().filter(u -> active7d.contains(u.getId())).count();
+        long d30 = newUsers.stream().filter(u -> active30d.contains(u.getId())).count();
+
+        return Map.of(
+                "newUsers", totalNew,
+                "D1", totalNew == 0 ? 0 : Math.round(d1 * 100.0 / totalNew),
+                "D7", Math.round(d7 * 100.0 / totalNew),
+                "D30", Math.round(d30 * 100.0 / totalNew));
+    }
+
+    // ============================================================
+    // 13. RETENTION COHORTS (weekly)
+    // ============================================================
+
+    @GetMapping("/retention/cohorts")
+    public List<Map<String, Object>> retentionCohorts() {
+
+        // FIXED — YearWeek helper
+        Map<YearWeek, List<User>> cohorts = userRepo.findAll().stream()
+                .collect(Collectors
+                        .groupingBy(u -> YearWeek.from(u.getCreatedAt().atZone(ANALYTICS_ZONE).toLocalDate())));
+
+        Instant now = Instant.now();
+        Instant last90 = now.minus(90, ChronoUnit.DAYS);
+
+        List<AuditLog> logs = auditLogRepo.findByTimestampBetween(last90, now);
+
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        // FIXED — iterate Map.Entry
+        for (Map.Entry<YearWeek, List<User>> entry : cohorts.entrySet()) {
+
+            YearWeek week = entry.getKey();
+            List<User> users = entry.getValue();
+
+            Set<String> userIds = users.stream().map(User::getId).collect(Collectors.toSet());
+
+            long d1 = logs.stream()
+                    .filter(l -> userIds.contains(l.getPerformedBy()))
+                    .filter(l -> l.getTimestamp().isBefore(
+                            weekStart(week).plus(1, ChronoUnit.DAYS)))
+                    .count();
+
+            long d7 = logs.stream()
+                    .filter(l -> userIds.contains(l.getPerformedBy()))
+                    .filter(l -> l.getTimestamp().isBefore(
+                            weekStart(week).plus(7, ChronoUnit.DAYS)))
+                    .count();
+
+            long d30 = logs.stream()
+                    .filter(l -> userIds.contains(l.getPerformedBy()))
+                    .filter(l -> l.getTimestamp().isBefore(
+                            weekStart(week).plus(30, ChronoUnit.DAYS)))
+                    .count();
+
+            result.add(Map.of(
+                    "week", week.toString(),
+                    "size", users.size(),
+                    "D1", d1,
+                    "D7", d7,
+                    "D30", d30));
+        }
+
+        // Sort by week
+        result.sort(Comparator.comparing(row -> (String) row.get("week")));
+        return result;
+    }
+
+    // Helper: start of cohort week
+    private Instant weekStart(YearWeek w) {
+        LocalDate first = LocalDate.of(w.year(), 1, 4); // ISO week anchor
+        return first.with(IsoFields.WEEK_OF_WEEK_BASED_YEAR, w.week())
+                .with(DayOfWeek.MONDAY)
+                .atStartOfDay(ANALYTICS_ZONE).toInstant();
+    }
+
+    // ========================================
+    // Helper DTO: YearWeek (YYYY-WW)
+    // ========================================
+    private record YearWeek(int year, int week) {
+
+        static YearWeek from(LocalDate date) {
+            var iso = WeekFields.ISO;
+            int week = date.get(iso.weekOfWeekBasedYear());
+            int year = date.get(IsoFields.WEEK_BASED_YEAR);
+            return new YearWeek(year, week);
+        }
+
+        @Override
+        public String toString() {
+            return year + "-W" + String.format("%02d", week);
+        }
+    }
+
+    // ============================================================
+    // B. USER ACTIVITY HISTOGRAM (0–23 hours)
+    // ============================================================
+
+    @GetMapping("/activity/histogram")
+    public Map<String, Object> userActivityHistogram(
+            @RequestParam(defaultValue = "7") int days) {
+
+        Instant now = Instant.now();
+        Instant since = now.minus(days, ChronoUnit.DAYS);
+
+        // Fetch logs from last X days
+        List<AuditLog> logs = auditLogRepo.findByTimestampBetween(since, now);
+
+        long[] buckets = new long[24]; // 0..23 hours
+
+        for (AuditLog log : logs) {
+            Instant ts = log.getTimestamp();
+            if (ts == null)
+                continue;
+
+            int hour = ts.atZone(ANALYTICS_ZONE).getHour();
+            buckets[hour]++;
+        }
+
+        // Build response
+        Map<String, Long> histogram = new LinkedHashMap<>();
+        for (int h = 0; h < 24; h++) {
+            histogram.put(String.format("%02d:00", h), buckets[h]);
+        }
+
+        return Map.of(
+                "windowDays", days,
+                "histogram", histogram);
+    }
+
+    // ============================================================
+    // C. TRENDING EVENTS (Composite score = likes + joins)
+    // ============================================================
+
+    @GetMapping("/trending-events")
+    public List<Map<String, Object>> trendingEvents(
+            @RequestParam(defaultValue = "7") int days,
+            @RequestParam(defaultValue = "20") int limit) {
+
+        Instant now = Instant.now();
+        Instant since = now.minus(days, ChronoUnit.DAYS);
+
+        List<Event> allEvents = eventRepo.findAll();
+
+        List<Map<String, Object>> scores = new ArrayList<>();
+
+        for (Event e : allEvents) {
+            String eventId = e.getId();
+
+            // Count likes in last X days
+            long likeCount = auditLogRepo.countByActionAndEventIdAndTimestampBetween(
+                    AuditAction.EVENT_LIKED,
+                    eventId,
+                    since,
+                    now);
+
+            // Count join approvals in last X days
+            long joinCount = auditLogRepo.countByActionAndEventIdAndTimestampBetween(
+                    AuditAction.EVENT_JOIN_APPROVED,
+                    eventId,
+                    since,
+                    now);
+
+            long score = likeCount + joinCount;
+
+            if (score > 0) {
+                scores.add(
+                        Map.of(
+                                "eventId", eventId,
+                                "title", e.getTitle(),
+                                "score", score,
+                                "likes", likeCount,
+                                "joins", joinCount));
+            }
+        }
+
+        // Sort by score DESC
+        scores.sort((a, b) -> Long.compare(
+                (Long) b.get("score"),
+                (Long) a.get("score")));
+
+        // Limit results
+        return scores.stream()
+                .limit(limit)
+                .toList();
+    }
+
+    // ============================================================
+    // D. TRENDING USERS (composite activity score)
+    // ============================================================
+
+    @GetMapping("/trending-users")
+    public List<Map<String, Object>> trendingUsers(
+            @RequestParam(defaultValue = "7") int days,
+            @RequestParam(defaultValue = "20") int limit) {
+
+        Instant now = Instant.now();
+        Instant since = now.minus(days, ChronoUnit.DAYS);
+
+        List<User> allUsers = userRepo.findAll();
+
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (User u : allUsers) {
+            String userId = u.getId();
+
+            // Events created in last X days
+            long eventsCreated = eventRepo
+                    .countByCreatedByUserIdAndCreatedAtBetween(userId, since, now);
+
+            // Likes they gave in last X days
+            long likesGiven = auditLogRepo
+                    .countByActionAndPerformedByAndTimestampBetween(
+                            AuditAction.EVENT_LIKED,
+                            userId,
+                            since,
+                            now);
+
+            // Joins they made in last X days
+            long joins = auditLogRepo
+                    .countByActionAndPerformedByAndTimestampBetween(
+                            AuditAction.EVENT_JOIN_APPROVED,
+                            userId,
+                            since,
+                            now);
+
+            long score = eventsCreated + likesGiven + joins;
+
+            if (score > 0) {
+                result.add(
+                        Map.of(
+                                "userId", userId,
+                                "name", Optional.ofNullable(u.getDisplayName())
+                                        .or(() -> Optional.ofNullable(u.getName()))
+                                        .orElse("Unknown"),
+                                "score", score,
+                                "eventsCreated", eventsCreated,
+                                "likesGiven", likesGiven,
+                                "joins", joins));
+            }
+        }
+
+        // Sort: highest score first
+        result.sort((a, b) -> Long.compare(
+                (Long) b.get("score"),
+                (Long) a.get("score")));
+
+        return result.stream().limit(limit).toList();
+    }
+
 }

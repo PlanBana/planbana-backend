@@ -5,6 +5,7 @@ import com.planbana.backend.events.EventRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import java.util.List;
 
 @Service
 public class EventReportService {
@@ -99,4 +100,13 @@ public class EventReportService {
 
         return repo.findAll(pageable);
     }
+
+    // ================================
+    // LIST REPORTS FOR A SPECIFIC E
+    // ============================
+
+    public List<EventReport> listReportsForEvent(String eventId) {
+        return repo.findByEventIdOrderByCreatedAtDesc(eventId);
+    }
+
 }

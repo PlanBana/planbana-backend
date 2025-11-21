@@ -1,59 +1,49 @@
 package com.planbana.backend.admin.settings;
 
-import com.planbana.backend.events.audit.AuditLog;
-import com.planbana.backend.events.audit.AuditLogRepository;
+import com.planbana.backend.audit.AuditLogger;
+import com.planbana.backend.audit.AuditAction;
+import com.planbana.backend.audit.AuditCategory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AdminSystemSettingsService {
 
     private final SystemSettingsRepository repo;
-    private final AuditLogRepository auditRepo;
+    private final AuditLogger audit;
 
-    public AdminSystemSettingsService(SystemSettingsRepository repo, AuditLogRepository auditRepo) {
+    public AdminSystemSettingsService(SystemSettingsRepository repo, AuditLogger audit) {
         this.repo = repo;
-        this.auditRepo = auditRepo;
+        this.audit = audit;
     }
 
-    /** Automatically create settings if not present. */
     public SystemSettings getSettings() {
         return repo.findById("GLOBAL").orElseGet(() -> repo.save(new SystemSettings()));
     }
 
-    /** Store audit log (SYSTEM_SETTINGS_UPDATED) */
-    private void log(String adminPhone, String action) {
-        auditRepo.save(new AuditLog(null, action, adminPhone, null));
-    }
-
-    /** Update system settings */
     public SystemSettings update(SystemSettings updated, String adminPhone) {
-        SystemSettings existing = getSettings();
+        SystemSettings s = getSettings();
 
-        // Maintenance
-        existing.setMaintenanceMode(updated.isMaintenanceMode());
-        existing.setMaintenanceMessage(updated.getMaintenanceMessage());
-        existing.setGlobalAnnouncement(updated.getGlobalAnnouncement());
+        // assign updated values:
+        s.setMaintenanceMode(updated.isMaintenanceMode());
+        s.setMaintenanceMessage(updated.getMaintenanceMessage());
+        s.setGlobalAnnouncement(updated.getGlobalAnnouncement());
+        s.setMaxEventParticipants(updated.getMaxEventParticipants());
+        s.setMaxEventsPerUser(updated.getMaxEventsPerUser());
+        s.setEventImageMaxSizeMb(updated.getEventImageMaxSizeMb());
+        s.setAutoBlockFlaggedEvents(updated.isAutoBlockFlaggedEvents());
+        s.setMaxReportsBeforeBlock(updated.getMaxReportsBeforeBlock());
+        s.setEnableEventChat(updated.isEnableEventChat());
+        s.setEnablePushNotifications(updated.isEnablePushNotifications());
+        s.setEnableUserRegistration(updated.isEnableUserRegistration());
+        s.setAllowGuestLogin(updated.isAllowGuestLogin());
+        s.setAdminEmailNotificationsEnabled(updated.isAdminEmailNotificationsEnabled());
 
-        // Limits
-        existing.setMaxEventParticipants(updated.getMaxEventParticipants());
-        existing.setMaxEventsPerUser(updated.getMaxEventsPerUser());
-        existing.setEventImageMaxSizeMb(updated.getEventImageMaxSizeMb());
+        repo.save(s);
 
-        // Moderation
-        existing.setAutoBlockFlaggedEvents(updated.isAutoBlockFlaggedEvents());
-        existing.setMaxReportsBeforeBlock(updated.getMaxReportsBeforeBlock());
+        audit.system(
+                AuditAction.SYSTEM_SETTINGS_UPDATED,
+                adminPhone);
 
-        // Feature flags
-        existing.setEnableEventChat(updated.isEnableEventChat());
-        existing.setEnablePushNotifications(updated.isEnablePushNotifications());
-        existing.setEnableUserRegistration(updated.isEnableUserRegistration());
-        existing.setAllowGuestLogin(updated.isAllowGuestLogin());
-
-        // Admin notifications
-        existing.setAdminEmailNotificationsEnabled(updated.isAdminEmailNotificationsEnabled());
-
-        repo.save(existing);
-        log(adminPhone, "ADMIN_UPDATED_SYSTEM_SETTINGS");
-        return existing;
+        return s;
     }
 }

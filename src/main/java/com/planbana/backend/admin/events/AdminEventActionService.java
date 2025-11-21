@@ -2,8 +2,9 @@ package com.planbana.backend.admin.events;
 
 import com.planbana.backend.events.Event;
 import com.planbana.backend.events.EventRepository;
-import com.planbana.backend.events.audit.AuditLog;
-import com.planbana.backend.events.audit.AuditLogRepository;
+import com.planbana.backend.audit.AuditLogger;
+import com.planbana.backend.audit.AuditAction;
+import com.planbana.backend.audit.AuditCategory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -12,11 +13,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class AdminEventActionService {
 
     private final EventRepository eventRepo;
-    private final AuditLogRepository auditRepo;
+    private final AuditLogger audit;
 
-    public AdminEventActionService(EventRepository eventRepo, AuditLogRepository auditRepo) {
+    public AdminEventActionService(EventRepository eventRepo, AuditLogger audit) {
         this.eventRepo = eventRepo;
-        this.auditRepo = auditRepo;
+        this.audit = audit;
     }
 
     private Event get(String id) {
@@ -24,83 +25,108 @@ public class AdminEventActionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     }
 
-    private void log(String eventId, String action, String adminId) {
-        auditRepo.save(new AuditLog(eventId, action, adminId, null));
-    }
-
-    // ============================================================
+    // -----------------------------
     // 1. Force Cancel Event
-    // ============================================================
-
+    // -----------------------------
     public Event forceCancel(String id, String adminId) {
         Event e = get(id);
         e.setCanceled(true);
         eventRepo.save(e);
 
-        log(id, "FORCE_CANCELED", adminId);
+        audit.log(
+                AuditCategory.ADMIN_EVENTS,
+                AuditAction.ADMIN_CANCELED_EVENT,
+                adminId,
+                null,
+                id);
+
         return e;
     }
 
-    // ============================================================
+    // -----------------------------
     // 2. Block Event
-    // ============================================================
-
+    // -----------------------------
     public Event blockEvent(String id, String adminId) {
         Event e = get(id);
         e.setStatus(Event.Status.BLOCKED);
         eventRepo.save(e);
 
-        log(id, "EVENT_BLOCKED", adminId);
+        audit.log(
+                AuditCategory.ADMIN_EVENTS,
+                AuditAction.ADMIN_BLOCKED_EVENT,
+                adminId,
+                null,
+                id);
+
         return e;
     }
 
-    // ============================================================
+    // -----------------------------
     // 3. Unblock Event
-    // ============================================================
-
+    // -----------------------------
     public Event unblockEvent(String id, String adminId) {
         Event e = get(id);
         e.setStatus(Event.Status.ACTIVE);
         eventRepo.save(e);
 
-        log(id, "EVENT_UNBLOCKED", adminId);
+        audit.log(
+                AuditCategory.ADMIN_EVENTS,
+                AuditAction.ADMIN_UNBLOCKED_EVENT,
+                adminId,
+                null,
+                id);
+
         return e;
     }
 
-    // ============================================================
+    // -----------------------------
     // 4. Hide Event
-    // ============================================================
-
+    // -----------------------------
     public Event hideEvent(String id, String adminId) {
         Event e = get(id);
         e.setStatus(Event.Status.HIDDEN);
         eventRepo.save(e);
 
-        log(id, "EVENT_HIDDEN", adminId);
+        audit.log(
+                AuditCategory.ADMIN_EVENTS,
+                AuditAction.ADMIN_HIDDEN_EVENT,
+                adminId,
+                null,
+                id);
+
         return e;
     }
 
-    // ============================================================
+    // -----------------------------
     // 5. Mark Pending Review
-    // ============================================================
-
+    // -----------------------------
     public Event markPendingReview(String id, String adminId) {
         Event e = get(id);
         e.setStatus(Event.Status.PENDING_REVIEW);
         eventRepo.save(e);
 
-        log(id, "EVENT_MARKED_PENDING_REVIEW", adminId);
+        audit.log(
+                AuditCategory.ADMIN_EVENTS,
+                AuditAction.ADMIN_REVIEWED_EVENT_REPORT,
+                adminId,
+                null,
+                id);
+
         return e;
     }
 
-    // ============================================================
+    // -----------------------------
     // 6. Hard Delete
-    // ============================================================
-
+    // -----------------------------
     public void deleteHard(String id, String adminId) {
-        get(id); // ensure exists
+        get(id);
         eventRepo.deleteById(id);
 
-        log(id, "EVENT_HARD_DELETED", adminId);
+        audit.log(
+                AuditCategory.ADMIN_EVENTS,
+                AuditAction.ADMIN_DELETED_EVENT,
+                adminId,
+                null,
+                id);
     }
 }

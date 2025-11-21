@@ -353,4 +353,104 @@ public class Event extends BaseEntity {
   public void setCanceled(boolean canceled) {
     isCanceled = canceled;
   }
+
+  // =========================
+  // Admin Moderation Fields
+  // =========================
+
+  // Event forcibly ended by admin
+  private boolean ended = false;
+
+  public boolean isEnded() {
+    return ended;
+  }
+
+  public void setEnded(boolean ended) {
+    this.ended = ended;
+  }
+
+  private Instant endedAt;
+
+  public Instant getEndedAt() {
+    return endedAt;
+  }
+
+  public void setEndedAt(Instant endedAt) {
+    this.endedAt = endedAt;
+  }
+
+  // Admin assigned moderator for handling this event
+  private String assignedModerator;
+
+  public String getAssignedModerator() {
+    return assignedModerator;
+  }
+
+  public void setAssignedModerator(String assignedModerator) {
+    this.assignedModerator = assignedModerator;
+  }
+
+  // Admin Notes (multiple)
+  private List<AdminNote> adminNotes = new ArrayList<>();
+
+  public List<AdminNote> getAdminNotes() {
+    return adminNotes;
+  }
+
+  public void setAdminNotes(List<AdminNote> adminNotes) {
+    this.adminNotes = adminNotes;
+  }
+
+  // =========================
+  // Admin Note Inner Class
+  // =========================
+  public static class AdminNote {
+    private String id;
+    private String adminId;
+    private String note;
+    private Instant createdAt;
+
+    public AdminNote() {
+    }
+
+    public AdminNote(String adminId, String note) {
+      this.id = UUID.randomUUID().toString();
+      this.adminId = adminId;
+      this.note = note;
+      this.createdAt = Instant.now();
+    }
+
+    public String getId() {
+      return id;
+    }
+
+    public String getAdminId() {
+      return adminId;
+    }
+
+    public String getNote() {
+      return note;
+    }
+
+    public Instant getCreatedAt() {
+      return createdAt;
+    }
+
+    public void setId(String id) {
+      this.id = id;
+    }
+
+    public void setAdminId(String adminId) {
+      this.adminId = adminId;
+    }
+
+    public void setNote(String note) {
+      this.note = note;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+      this.createdAt = createdAt;
+    }
+  }
+
 }

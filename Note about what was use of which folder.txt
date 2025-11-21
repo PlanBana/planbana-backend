@@ -24,7 +24,7 @@ Admin dashboard displays moderation actions
 ------------------------------------------------------------
 
 
-(AdminReportsController)
+(AdminReportsController) ✅
 
 This will give admins:
 
@@ -37,5 +37,84 @@ This will give admins:
 
 This uses the earlier EventReportService, EventReport, and AutoModerationService.
 
+-------------------------------------------------------------------------------------------
 
+Moderation folder ✅
+How this ties into your existing pieces 
+
+EventReportService.evaluateAutoModeration(eventId) already calls:
+
+autoModeration.autoBlockEventIfThresholdReached(event, count)
+
+autoModeration.isSpam(...) / autoHideSuspiciousEvent(...)
+
+AdminReportsController works on EventReport entities for the moderation queue.
+
+With these enhancements:
+
+Events can be auto-blocked when report threshold is reached.
+
+Events can be auto-hidden based on spam heuristics.
+
+Old events can be auto-archived (canceled) after X days past endAt.
+
+A cron job periodically runs the checks and logs everything into your unified AuditLog.
+
+-------------------------------------------------------------------------------------------
+
+Great question. Retention analytics (cohorts) are NOT only for the admin dashboard — they are a platform-wide business metric, but they are displayed in the admin dashboard.
+
+Let me break it down clearly:
+
+✅ Retention Analytics: Who Uses It?
+✔ Admin Dashboard (primary)
+
+Retention analytics (D1 / D7 / D30) are meant for admins only, because they tell you:
+
+Are new users coming back the next day?
+
+Are they staying engaged after 7 days?
+
+Are they active in the first month?
+
+This is business intelligence, not user-facing.
+
+✔ NOT shown to regular app users
+
+Normal mobile app users should never see retention metrics.
+It’s confidential + internal analytics.
+
+✔ Used internally for:
+
+Growth teams
+
+Product team
+
+Business decision making
+
+Understanding user engagement
+
+Optimizing onboarding flows
+
+Improving event recommendations
+
+Marketing + push notification strategies
+
+-------------------------------------------------------------------------------------------
+
+I’m going to give you a clean SSE-based Admin Activity Feed that:
+
+Compiles standalone ✅
+
+Does not change your existing files ✅
+
+Is ready to integrate with AuditLogger later ✅
+
+We’ll add two new files:
+
+AdminActivityFeedService.java – keeps track of SSE clients and broadcasts events
+
+AdminActivityFeedController.java – exposes /api/admin/activity/stream + a /test endpoint
+
+-----  -------------------------------------------------------------------------------------------
 

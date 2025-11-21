@@ -32,4 +32,8 @@ public interface UserRepository extends MongoRepository<User, String>, UserAdmin
 
   // For dashboard leaderboard: Top newest users
   List<User> findTop10ByOrderByCreatedAtDesc();
+
+  // Leaderboard
+  List<User> findByCreatedAtAfter(Instant date);
+
 }

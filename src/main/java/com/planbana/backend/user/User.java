@@ -1,6 +1,8 @@
 package com.planbana.backend.user;
 
 import com.planbana.backend.common.BaseEntity;
+import com.planbana.backend.user.User.AdminNote;
+
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -372,9 +374,95 @@ public class User extends BaseEntity {
 
   public static class AdminNote {
     public String id;
+
+    public String getId() {
+      return id;
+    }
+
+    public void setId(String id) {
+      this.id = id;
+    }
+
     public String adminId;
+
+    public String getAdminId() {
+      return adminId;
+    }
+
+    public void setAdminId(String adminId) {
+      this.adminId = adminId;
+    }
+
     public String note;
+
+    public String getNote() {
+      return note;
+    }
+
+    public void setNote(String note) {
+      this.note = note;
+    }
+
     public Instant createdAt = Instant.now();
+
+    public Instant getCreatedAt() {
+      return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+      this.createdAt = createdAt;
+    }
+
+    public AdminNote() {
+    }
+
+    public AdminNote(String adminId, String note) {
+      this.id = UUID.randomUUID().toString();
+      this.adminId = adminId;
+      this.note = note;
+      this.createdAt = Instant.now();
+    }
+  }
+
+  // This is for banning User from the entire platform
+  private Boolean banned = false;
+
+  public void setBanned(Boolean banned) {
+    this.banned = banned;
+  }
+
+  public Boolean getBanned() {
+    return banned;
+  }
+
+  private String bannedReason;
+
+  public String getBannedReason() {
+    return bannedReason;
+  }
+
+  public void setBannedReason(String bannedReason) {
+    this.bannedReason = bannedReason;
+  }
+
+  private Instant bannedAt;
+
+  public Instant getBannedAt() {
+    return bannedAt;
+  }
+
+  public void setBannedAt(Instant bannedAt) {
+    this.bannedAt = bannedAt;
+  }
+
+  private List<String> moderatorRegions = new ArrayList<>();
+
+  public List<String> getModeratorRegions() {
+    return moderatorRegions;
+  }
+
+  public void setModeratorRegions(List<String> moderatorRegions) {
+    this.moderatorRegions = moderatorRegions;
   }
 
 }

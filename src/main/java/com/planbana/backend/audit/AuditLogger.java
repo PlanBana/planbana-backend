@@ -1,17 +1,20 @@
 package com.planbana.backend.audit;
 
+import com.planbana.backend.admin.activity.AdminActivityFeedService;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.util.Map;
 
 @Component
 public class AuditLogger {
 
     private final AuditLogRepository repo;
+    private final AdminActivityFeedService activityFeed;
 
-    public AuditLogger(AuditLogRepository repo) {
+    public AuditLogger(AuditLogRepository repo,
+            AdminActivityFeedService activityFeed) {
         this.repo = repo;
+        this.activityFeed = activityFeed;
     }
 
     // ============================================================
@@ -34,8 +37,14 @@ public class AuditLogger {
                 eventId,
                 meta);
 
-        // timestamp already assigned inside constructor
+        // Persist
         repo.save(log);
+
+        // Push to SSE feed (best-effort, never break request)
+        try {
+            activityFeed.publishAudit(log);
+        } catch (Exception ignored) {
+        }
     }
 
     // ============================================================
@@ -69,6 +78,11 @@ public class AuditLogger {
                 meta);
 
         repo.save(log);
+
+        try {
+            activityFeed.publishAudit(log);
+        } catch (Exception ignored) {
+        }
     }
 
     public void security(
@@ -95,6 +109,11 @@ public class AuditLogger {
                 meta);
 
         repo.save(log);
+
+        try {
+            activityFeed.publishAudit(log);
+        } catch (Exception ignored) {
+        }
     }
 
     public void system(

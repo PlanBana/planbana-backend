@@ -1,6 +1,5 @@
 package com.planbana.backend.admin.settings;
 
-import com.planbana.backend.admin.settings.SystemSettings;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +17,7 @@ public class AdminSystemSettingsController {
         return auth.getName(); // phone of admin from JWT
     }
 
-    // Fetch all settings
+    // Fetch all system settings
     @GetMapping
     public SystemSettings get() {
         return service.getSettings();

@@ -31,7 +31,7 @@ public class EventReport {
     public enum Status {
         PENDING,
         REVIEWED,
-        ACTION_TAKEN
+        ACTION_TAKEN, APPROVED, REJECTED
     }
 
     // ============================

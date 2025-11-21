@@ -9,25 +9,40 @@ import java.util.List;
 
 public interface AuditLogRepository extends MongoRepository<AuditLog, String> {
 
-    Page<AuditLog> findByCategory(AuditCategory category, Pageable pageable);
+        Page<AuditLog> findByCategory(AuditCategory category, Pageable pageable);
 
-    Page<AuditLog> findByPerformedBy(String userId, Pageable pageable);
+        Page<AuditLog> findByPerformedBy(String userId, Pageable pageable);
 
-    Page<AuditLog> findByEventId(String eventId, Pageable pageable);
+        Page<AuditLog> findByEventId(String eventId, Pageable pageable);
 
-    Page<AuditLog> findByTargetUser(String targetUserId, Pageable pageable);
+        Page<AuditLog> findByTargetUser(String targetUserId, Pageable pageable);
 
-    Page<AuditLog> findByAction(AuditAction action, Pageable pageable);
+        Page<AuditLog> findByAction(AuditAction action, Pageable pageable);
 
-    // For your existing endpoint: /events/{id}/audit-logs
-    List<AuditLog> findByEventIdOrderByTimestampDesc(String eventId);
+        // For your existing endpoint: /events/{id}/audit-logs
+        List<AuditLog> findByEventIdOrderByTimestampDesc(String eventId);
 
-    // ✅ NEW: for DAU/WAU/MAU analytics
-    List<AuditLog> findByTimestampBetween(Instant start, Instant end);
+        // ✅ NEW: for DAU/WAU/MAU analytics
+        List<AuditLog> findByTimestampBetween(Instant start, Instant end);
 
-    // ✅ NEW: for DAU/WAU/MAU, we fetch login logs in a time window
-    List<AuditLog> findByActionAndTimestampBetween(
-            AuditAction action,
-            Instant start,
-            Instant end);
+        // ✅ NEW: for DAU/WAU/MAU, we fetch login logs in a time window
+        List<AuditLog> findByActionAndTimestampBetween(
+                        AuditAction action,
+                        Instant start,
+                        Instant end);
+
+        // ✅ NEW: for retention analysis
+        long countByActionAndEventIdAndTimestampBetween(
+                        AuditAction action,
+                        String eventId,
+                        Instant start,
+                        Instant end);
+
+        // ✅ NEW: for retention analysis per user
+        long countByActionAndPerformedByAndTimestampBetween(
+                        AuditAction action,
+                        String userId,
+                        Instant start,
+                        Instant end);
+
 }

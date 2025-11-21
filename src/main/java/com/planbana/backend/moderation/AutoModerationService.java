@@ -7,10 +7,10 @@ import com.planbana.backend.events.Event;
 import com.planbana.backend.events.EventRepository;
 import com.planbana.backend.user.User;
 import com.planbana.backend.user.UserRepository;
-
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
@@ -21,8 +21,7 @@ public class AutoModerationService {
     private final UserRepository userRepo;
     private final AuditLogger auditLogger;
 
-    // Configurable thresholds
-    private static final int REPORT_THRESHOLD = 5;
+    // Simple spam heuristics; tunable
     private static final int SPAM_DESCRIPTION_MIN_LENGTH = 20;
     private static final int SPAM_REPEAT_KEYWORD_COUNT = 3;
 
@@ -39,17 +38,24 @@ public class AutoModerationService {
     // =========================================================================
     public void autoBlockEventIfThresholdReached(Event event, int reportCount) {
 
-        if (reportCount < REPORT_THRESHOLD)
+        if (!ModerationRules.AUTO_BLOCK_ENABLED) {
             return;
+        }
+
+        if (reportCount < ModerationRules.REPORT_THRESHOLD) {
+            return;
+        }
 
         // Already blocked? skip
-        if (event.getStatus() == Event.Status.BLOCKED)
+        if (event.getStatus() == Event.Status.BLOCKED) {
             return;
+        }
 
         Event.Status oldStatus = event.getStatus();
         event.setStatus(Event.Status.BLOCKED);
         eventRepo.save(event);
 
+        // Admin-style log: event got blocked
         auditLogger.log(
                 AuditCategory.ADMIN_EVENTS,
                 AuditAction.EVENT_AUTO_BLOCKED,
@@ -58,17 +64,21 @@ public class AutoModerationService {
                 event.getId(),
                 Map.of(
                         "reason", "REPORT_THRESHOLD_REACHED",
-                        "oldStatus", oldStatus.name(),
+                        "oldStatus", oldStatus != null ? oldStatus.name() : null,
                         "newStatus", "BLOCKED",
-                        "reports", reportCount));
+                        "reports", reportCount,
+                        "threshold", ModerationRules.REPORT_THRESHOLD));
 
+        // Fraud / automation log for analytics
         auditLogger.log(
                 AuditCategory.FRAUD,
                 AuditAction.REPORT_THRESHOLD_REACHED,
                 "SYSTEM",
                 event.getCreatedByUserId(),
                 event.getId(),
-                Map.of("reports", reportCount));
+                Map.of(
+                        "reports", reportCount,
+                        "threshold", ModerationRules.REPORT_THRESHOLD));
     }
 
     // =========================================================================
@@ -76,12 +86,16 @@ public class AutoModerationService {
     // =========================================================================
     public void autoHideSuspiciousEvent(Event event, String reason) {
 
-        if (event.getStatus() == Event.Status.HIDDEN)
+        if (!ModerationRules.AUTO_SPAM_HIDE_ENABLED) {
             return;
+        }
+
+        if (event.getStatus() == Event.Status.HIDDEN) {
+            return;
+        }
 
         Event.Status oldStatus = event.getStatus();
         event.setStatus(Event.Status.HIDDEN);
-
         eventRepo.save(event);
 
         auditLogger.log(
@@ -92,7 +106,7 @@ public class AutoModerationService {
                 event.getId(),
                 Map.of(
                         "reason", reason,
-                        "oldStatus", oldStatus.name(),
+                        "oldStatus", oldStatus != null ? oldStatus.name() : null,
                         "newStatus", "HIDDEN"));
 
         auditLogger.log(
@@ -105,20 +119,27 @@ public class AutoModerationService {
     }
 
     // =========================================================================
-    // 3️⃣ SPAM DETECTION
+    // 3️⃣ SPAM DETECTION – simple heuristic
     // =========================================================================
     public boolean isSpam(Event event) {
         String text = (event.getDescription() == null ? "" : event.getDescription()).toLowerCase();
 
-        if (text.length() < SPAM_DESCRIPTION_MIN_LENGTH)
+        // Very short description -> suspicious
+        if (text.length() < SPAM_DESCRIPTION_MIN_LENGTH) {
             return true;
+        }
 
         String[] tokens = text.split("\\s+");
 
-        // Count repeated words
+        // Very naive: if many characters repeated, treat as spam
         int repeatCount = 0;
         for (String token : tokens) {
-            if (text.chars().filter(ch -> ch == token.charAt(0)).count() > 10) {
+            if (token.isEmpty())
+                continue;
+            long occurrences = text.chars()
+                    .filter(ch -> ch == token.charAt(0))
+                    .count();
+            if (occurrences > 10) {
                 repeatCount++;
             }
         }
@@ -127,7 +148,58 @@ public class AutoModerationService {
     }
 
     // =========================================================================
-    // 4️⃣ AI-BASED AUTO REJECTION OF KYC
+    // 4️⃣ AUTO-ARCHIVE OLD EVENTS
+    // =========================================================================
+    /**
+     * Auto-archive (= mark as canceled) events whose endAt is older than
+     * AUTO_ARCHIVE_DAYS_AFTER_END days.
+     *
+     * We are using `isCanceled = true` as the archived flag to avoid introducing
+     * a new Event.Status value that might break existing code.
+     */
+    public void autoArchiveOldEvents() {
+
+        if (!ModerationRules.AUTO_ARCHIVE_ENABLED) {
+            return;
+        }
+
+        Instant now = Instant.now();
+        Instant cutoff = now.minus(ModerationRules.AUTO_ARCHIVE_DAYS_AFTER_END, ChronoUnit.DAYS);
+
+        List<Event> events = eventRepo.findAll();
+
+        for (Event e : events) {
+            if (e.getEndAt() == null) {
+                continue;
+            }
+            if (e.isCanceled()) {
+                continue;
+            }
+
+            // ended long ago?
+            if (e.getEndAt().isBefore(cutoff)) {
+                boolean oldCanceled = e.isCanceled();
+
+                e.setCanceled(true);
+                eventRepo.save(e);
+
+                auditLogger.log(
+                        AuditCategory.EVENT_LIFECYCLE,
+                        AuditAction.EVENT_AUTO_ARCHIVED,
+                        "SYSTEM",
+                        e.getCreatedByUserId(),
+                        e.getId(),
+                        Map.of(
+                                "oldCanceledState", oldCanceled,
+                                "newCanceledState", true,
+                                "endAt", e.getEndAt().toString(),
+                                "cutoffDays", ModerationRules.AUTO_ARCHIVE_DAYS_AFTER_END));
+            }
+        }
+    }
+
+    // =========================================================================
+    // 5️⃣ AI-BASED AUTO REJECTION OF KYC
     // =========================================================================
     public void rejectKycAutomatically(User user, String reason, Map<String, Object> aiMeta) {
 
@@ -143,14 +215,14 @@ public class AutoModerationService {
                 user.getId(),
                 null,
                 Map.of(
-                        "oldStatus", oldStatus.name(),
+                        "oldStatus", oldStatus != null ? oldStatus.name() : null,
                         "newStatus", "REJECTED",
                         "reason", reason,
                         "aiMeta", aiMeta));
     }
 
     // =========================================================================
-    // 5️⃣ AI FLAGGING → triggers moderation queue
+    // 6️⃣ AI FLAGGING → triggers moderation queue (AdminReports)
     // =========================================================================
     public void flagEventAI(Event event, Map<String, Object> prediction) {
 
@@ -163,19 +235,33 @@ public class AutoModerationService {
                 Map.of(
                         "aiPrediction", prediction,
                         "timestamp", Instant.now().toString()));
+        // The actual queue is built on EventReport + AdminReportsController.
+        // This log helps admins see AI flags in audit feed.
     }
 
     // =========================================================================
-    // 6️⃣ CRON: run background auto-moderation checks
+    // 7️⃣ CRON: run background auto-moderation checks
     // =========================================================================
+    /**
+     * Background checks: spam detection auto-hide.
+     * Archiving is done in a separate method so cron can call both.
+     */
     public void runBackgroundChecks() {
+        if (!ModerationRules.CRON_ENABLED) {
+            return;
+        }
+
         List<Event> events = eventRepo.findAll();
 
         for (Event e : events) {
+            if (!ModerationRules.AUTO_SPAM_HIDE_ENABLED) {
+                continue;
+            }
+
             boolean spam = isSpam(e);
 
             if (spam) {
-                autoHideSuspiciousEvent(e, "AI_SPAM_DETECTED");
+                autoHideSuspiciousEvent(e, "AI_SPAM_DETECTED_BACKGROUND");
             }
         }
     }

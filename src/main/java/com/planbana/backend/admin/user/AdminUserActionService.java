@@ -1,7 +1,8 @@
 package com.planbana.backend.admin.user;
 
-import com.planbana.backend.events.audit.AuditLog;
-import com.planbana.backend.events.audit.AuditLogRepository;
+import com.planbana.backend.audit.AuditLogger;
+import com.planbana.backend.audit.AuditAction;
+import com.planbana.backend.audit.AuditCategory;
 import com.planbana.backend.user.User;
 import com.planbana.backend.user.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -16,12 +17,12 @@ public class AdminUserActionService {
 
     private final UserRepository userRepo;
     private final PasswordEncoder encoder;
-    private final AuditLogRepository auditRepo;
+    private final AuditLogger audit;
 
-    public AdminUserActionService(UserRepository userRepo, PasswordEncoder encoder, AuditLogRepository auditRepo) {
+    public AdminUserActionService(UserRepository userRepo, PasswordEncoder encoder, AuditLogger audit) {
         this.userRepo = userRepo;
         this.encoder = encoder;
-        this.auditRepo = auditRepo;
+        this.audit = audit;
     }
 
     private User get(String id) {
@@ -29,50 +30,41 @@ public class AdminUserActionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
-    private void log(String targetUser, String action, String adminPhone) {
-        auditRepo.save(new AuditLog(
-                null, // no eventId
-                action,
-                adminPhone,
-                targetUser));
-    }
-
-    // ============================================================
-    // 1. Reset Password
-    // ============================================================
-
-    public User resetPassword(String userId, String newPassword, String adminPhone) {
-        User u = get(userId);
+    // 1. Reset password
+    public User resetPassword(String id, String newPassword, String adminPhone) {
+        User u = get(id);
         u.setPasswordHash(encoder.encode(newPassword));
         userRepo.save(u);
 
-        log(userId, "ADMIN_RESET_PASSWORD", adminPhone);
+        audit.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.ADMIN_RESET_PASSWORD,
+                adminPhone,
+                id,
+                null);
+
         return u;
     }
 
-    // ============================================================
-    // 2. Update Roles
-    // ============================================================
-
-    public User updateRoles(String userId, Set<String> roles, String adminPhone) {
-        if (roles == null || roles.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User must have at least one role");
-        }
-
-        User u = get(userId);
+    // 2. Update roles
+    public User updateRoles(String id, Set<String> roles, String adminPhone) {
+        User u = get(id);
         u.setRoles(roles);
         userRepo.save(u);
 
-        log(userId, "ADMIN_UPDATED_ROLES", adminPhone);
+        audit.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.ADMIN_UPDATED_ROLES,
+                adminPhone,
+                id,
+                null);
+
         return u;
     }
 
-    // ============================================================
-    // 3. Update Profile Fields
-    // ============================================================
-
-    public User updateProfile(String userId, AdminUserUpdateProfileRequest dto, String adminPhone) {
-        User u = get(userId);
+    // 3. Update profile
+    public User updateProfile(String id, AdminUserUpdateProfileRequest dto, String adminPhone) {
+        User u = get(id);
 
         if (dto.name != null)
             u.setName(dto.name);
@@ -93,33 +85,45 @@ public class AdminUserActionService {
 
         userRepo.save(u);
 
-        log(userId, "ADMIN_UPDATED_PROFILE", adminPhone);
+        audit.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.ADMIN_UPDATED_PROFILE,
+                adminPhone,
+                id,
+                null);
+
         return u;
     }
 
-    // ============================================================
-    // 4. Force Verify User
-    // ============================================================
-
-    public User forceVerify(String userId, User.VerificationStatus status, String adminPhone) {
-        User u = get(userId);
+    // 4. Force verification
+    public User forceVerify(String id, User.VerificationStatus status, String adminPhone) {
+        User u = get(id);
         u.setGovIdVerificationStatus(status);
         userRepo.save(u);
 
-        log(userId, "ADMIN_FORCE_VERIFICATION_" + status, adminPhone);
+        audit.log(
+                AuditCategory.ADMIN_USERS,
+                AuditAction.valueOf("ADMIN_FORCE_VERIFICATION_" + status),
+                adminPhone,
+                id,
+                null);
+
         return u;
     }
 
-    // ============================================================
-    // 5. Enable / Disable User
-    // ============================================================
-
-    public User setDisabled(String userId, boolean disabled, String adminPhone) {
-        User u = get(userId);
+    // 5. Enable/disable user
+    public User setDisabled(String id, boolean disabled, String adminPhone) {
+        User u = get(id);
         u.setDisabled(disabled);
         userRepo.save(u);
 
-        log(userId, disabled ? "ADMIN_DISABLED_USER" : "ADMIN_ENABLED_USER", adminPhone);
+        audit.log(
+                AuditCategory.ADMIN_USERS,
+                disabled ? AuditAction.ADMIN_DISABLED_USER : AuditAction.ADMIN_ENABLED_USER,
+                adminPhone,
+                id,
+                null);
+
         return u;
     }
 }
