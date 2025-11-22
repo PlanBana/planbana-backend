@@ -264,6 +264,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -359,6 +360,48 @@ public class AdminUserController {
     // Endpoints
     // ===================================================================
 
+    // @GetMapping
+    // public Page<UserSummary> listUsers(
+    // @RequestParam(required = false, name = "search") String search,
+    // @RequestParam(required = false, name = "q") String q,
+    // @RequestParam(defaultValue = "0") @Min(0) int page,
+    // @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+    // @RequestParam(required = false) String role,
+    // @RequestParam(required = false) String status,
+    // Authentication auth) {
+
+    // // 🔥 Fix empty parameters
+    // String term = (search != null && !search.isBlank())
+    // ? search
+    // : (q != null && !q.isBlank() ? q : null);
+
+    // User.VerificationStatus vs = null;
+    // if (status != null && !status.isBlank()) {
+    // try {
+    // vs = User.VerificationStatus.valueOf(status);
+    // } catch (IllegalArgumentException ignored) {
+    // }
+    // }
+
+    // String adminId = auth.getName();
+
+    // auditLogger.log(
+    // AuditCategory.ADMIN_USERS,
+    // AuditAction.ADMIN_VIEW_USER_LIST,
+    // adminId,
+    // null,
+    // null,
+    // Map.of(
+    // "search", term,
+    // "roleFilter", role,
+    // "verificationFilter", vs,
+    // "page", page,
+    // "size", size));
+
+    // Page<User> results = service.searchUsers(term, page, size, role, vs);
+    // return results.map(UserSummary::from);
+    // }
+
     @GetMapping
     public Page<UserSummary> listUsers(
             @RequestParam(required = false, name = "search") String search,
@@ -369,7 +412,6 @@ public class AdminUserController {
             @RequestParam(required = false) String status,
             Authentication auth) {
 
-        // 🔥 Fix empty parameters
         String term = (search != null && !search.isBlank())
                 ? search
                 : (q != null && !q.isBlank() ? q : null);
@@ -378,11 +420,18 @@ public class AdminUserController {
         if (status != null && !status.isBlank()) {
             try {
                 vs = User.VerificationStatus.valueOf(status);
-            } catch (IllegalArgumentException ignored) {
+            } catch (Exception ignored) {
             }
         }
 
         String adminId = auth.getName();
+
+        Map<String, Object> auditData = new HashMap<>();
+        auditData.put("search", term);
+        auditData.put("roleFilter", role);
+        auditData.put("verificationFilter", vs);
+        auditData.put("page", page);
+        auditData.put("size", size);
 
         auditLogger.log(
                 AuditCategory.ADMIN_USERS,
@@ -390,12 +439,7 @@ public class AdminUserController {
                 adminId,
                 null,
                 null,
-                Map.of(
-                        "search", term,
-                        "roleFilter", role,
-                        "verificationFilter", vs,
-                        "page", page,
-                        "size", size));
+                auditData);
 
         Page<User> results = service.searchUsers(term, page, size, role, vs);
         return results.map(UserSummary::from);
@@ -500,4 +544,5 @@ public class AdminUserController {
                         "phone", toDelete.getPhone(),
                         "roles", toDelete.getRoles()));
     }
+
 }

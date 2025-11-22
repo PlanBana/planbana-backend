@@ -29,43 +29,89 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    if (HttpMethod.OPTIONS.matches(request.getMethod()))
-      return true;
-    String path = request.getServletPath();
-    return path.startsWith("/api/auth");
+    String path = request.getRequestURI();
+
+    // Skip only the real auth endpoints
+    return path.startsWith("/api/auth/");
   }
+
+  // @Override
+  // protected void doFilterInternal(HttpServletRequest request,
+  // HttpServletResponse response,
+  // FilterChain filterChain) throws ServletException, IOException {
+
+  // String token = resolveToken(request);
+
+  // if (token != null && jwtService.validateToken(token)) {
+  // String username = jwtService.getUsername(token);
+  // List<String> roles = jwtService.getRoles(token);
+
+  // if (username != null &&
+  // SecurityContextHolder.getContext().getAuthentication() == null) {
+  // // Ensure roles are Spring-friendly ("ROLE_USER" instead of "USER")
+  // List<SimpleGrantedAuthority> authorities = roles.stream()
+  // .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+  // .map(SimpleGrantedAuthority::new)
+  // .toList();
+
+  // // List<SimpleGrantedAuthority> authorities = roles.stream()
+  // // .map(SimpleGrantedAuthority::new)
+  // // .toList();
+
+  // UsernamePasswordAuthenticationToken authToken = new
+  // UsernamePasswordAuthenticationToken(
+  // username, // principal
+  // null,
+  // authorities);
+
+  // SecurityContextHolder.getContext().setAuthentication(authToken);
+
+  // System.out.println("✅ Authenticated " + username + " with roles " +
+  // authorities);
+  // }
+  // }
+
+  // filterChain.doFilter(request, response);
+  // }
 
   @Override
   protected void doFilterInternal(HttpServletRequest request,
       HttpServletResponse response,
       FilterChain filterChain) throws ServletException, IOException {
 
+    String uri = request.getRequestURI();
+    System.out.println("---- JWT FILTER ----");
+    System.out.println("Request: " + request.getMethod() + " " + uri);
+
     String token = resolveToken(request);
+
+    if (token == null) {
+      System.out.println("No token found");
+    } else {
+      System.out.println("Token found: " + token.substring(0, 10) + "...");
+      System.out.println("Token roles (raw): " + jwtService.getRoles(token));
+    }
 
     if (token != null && jwtService.validateToken(token)) {
       String username = jwtService.getUsername(token);
       List<String> roles = jwtService.getRoles(token);
 
-      if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-        // Ensure roles are Spring-friendly ("ROLE_USER" instead of "USER")
-        List<SimpleGrantedAuthority> authorities = roles.stream()
-            .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
-            .map(SimpleGrantedAuthority::new)
-            .toList();
+      System.out.println("Valid token for: " + username);
+      System.out.println("Roles extracted: " + roles);
 
-        // List<SimpleGrantedAuthority> authorities = roles.stream()
-        // .map(SimpleGrantedAuthority::new)
-        // .toList();
+      List<SimpleGrantedAuthority> authorities = roles.stream()
+          .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+          .map(SimpleGrantedAuthority::new)
+          .toList();
 
-        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-            username, // principal
-            null,
-            authorities);
+      System.out.println("Authorities applied: " + authorities);
 
-        SecurityContextHolder.getContext().setAuthentication(authToken);
+      UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(username, null,
+          authorities);
 
-        System.out.println("✅ Authenticated " + username + " with roles " + authorities);
-      }
+      SecurityContextHolder.getContext().setAuthentication(authToken);
+    } else {
+      System.out.println("Token INVALID");
     }
 
     filterChain.doFilter(request, response);

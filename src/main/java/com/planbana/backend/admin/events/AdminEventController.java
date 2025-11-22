@@ -224,6 +224,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -363,10 +364,17 @@ public class AdminEventController {
             try {
                 realStatus = Event.Status.valueOf(status);
             } catch (IllegalArgumentException ignored) {
+                // invalid value is simply ignored → treated as "ALL"
             }
         }
 
         String adminId = auth.getName();
+
+        // ✅ FIX: Use HashMap because null is allowed
+        Map<String, Object> auditData = new HashMap<>();
+        auditData.put("statusFilter", status); // keep raw string to avoid null enum issues
+        auditData.put("page", page);
+        auditData.put("size", size);
 
         auditLogger.log(
                 AuditCategory.ADMIN_EVENTS,
@@ -374,7 +382,7 @@ public class AdminEventController {
                 adminId,
                 null,
                 null,
-                Map.of("statusFilter", realStatus, "page", page, "size", size));
+                auditData);
 
         Page<Event> p = service.listByStatus(realStatus, page, size);
         return p.map(EventSummary::from);
