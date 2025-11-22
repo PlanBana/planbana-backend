@@ -29,6 +29,9 @@ public class AuthController {
   private final JwtService jwt;
   private final AuditLogger auditLogger;
 
+  // ⭐ Single source of truth for admin phone (normalized format)
+  private static final String ADMIN_PHONE = "919999999999";
+
   public AuthController(
       UserRepository users,
       PasswordEncoder encoder,
@@ -118,7 +121,13 @@ public class AuthController {
       u.setPhone(phone);
       u.setPasswordHash(encoder.encode(req.password));
       u.setPhoneVerified(true);
-      u.setRoles(Set.of("USER"));
+
+      // ⭐ If this is the admin phone, give ADMIN + USER
+      if (ADMIN_PHONE.equals(phone)) {
+        u.setRoles(Set.of("ADMIN", "USER"));
+      } else {
+        u.setRoles(Set.of("USER"));
+      }
 
       if (u.getLanguages() == null || u.getLanguages().isEmpty()) {
         u.setLanguages(List.of("English"));
@@ -136,8 +145,13 @@ public class AuthController {
           Map.of("phone", phone));
 
       // Generate JWT
+      // Set<String> jwtRoles = u.getRoles().stream()
+      // .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+      // .collect(Collectors.toSet());
+
       Set<String> jwtRoles = u.getRoles().stream()
-          .map(r -> "ROLE_" + r)
+          .map(r -> r.replace("ROLE_", "")) // normalize
+          .map(r -> "ROLE_" + r) // standardize
           .collect(Collectors.toSet());
 
       String access = jwt.generateAccess(u.getPhone(), jwtRoles);
@@ -239,6 +253,15 @@ public class AuthController {
         return ResponseEntity.badRequest().body(Map.of("error", "Invalid password"));
       }
 
+      // ⭐ Ensure admin always has ADMIN + USER roles at login time
+      if (ADMIN_PHONE.equals(u.getPhone())) {
+        Set<String> fixedRoles = new HashSet<>(u.getRoles() != null ? u.getRoles() : Set.of());
+        fixedRoles.add("ADMIN");
+        fixedRoles.add("USER");
+        u.setRoles(fixedRoles);
+        users.save(u); // persist correction so DB matches
+      }
+
       // Successful login
       auditLogger.log(
           AuditCategory.USER_ACCOUNT,
@@ -248,9 +271,14 @@ public class AuthController {
           null,
           Map.of("phone", phone));
 
-      // Build JWT
+      // Build JWT from roles stored on user (now guaranteed correct for admin)
+      // Set<String> jwtRoles = u.getRoles().stream()
+      // .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+      // .collect(Collectors.toSet());
+
       Set<String> jwtRoles = u.getRoles().stream()
-          .map(r -> "ROLE_" + r)
+          .map(r -> r.replace("ROLE_", "")) // normalize
+          .map(r -> "ROLE_" + r) // standardize
           .collect(Collectors.toSet());
 
       String access = jwt.generateAccess(u.getPhone(), jwtRoles);

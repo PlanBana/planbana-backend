@@ -14,37 +14,32 @@ import java.util.Set;
 public class SeedAdminUser {
 
     @Bean
-    CommandLineRunner createAdmin(UserRepository userRepo, PasswordEncoder passwordEncoder) {
+    CommandLineRunner createAdmin(UserRepository userRepo, PasswordEncoder encoder) {
         return args -> {
 
-            String adminPhone = "919999999999"; // 🔥 normalized version you actually log in with
+            String adminPhone = "919999999999";
 
-            // Try to find existing user by this phone
             User admin = userRepo.findByPhone(adminPhone).orElse(null);
 
             if (admin == null) {
-                // Create fresh admin user
                 admin = new User();
                 admin.setPhone(adminPhone);
-                admin.setEmail("admin@planbana.com");
-                admin.setName("PlanBana Admin");
-                admin.setDisplayName("Admin");
-
-                admin.setPasswordHash(passwordEncoder.encode("Admin@12345"));
+                admin.setFirebaseUid("dev-admin");
+                admin.setPasswordHash(encoder.encode("Admin@12345"));
                 admin.setPhoneVerified(true);
-                admin.setLanguages(List.of("English"));
             }
 
-            // ✅ Ensure roles always include ADMIN + USER
+            // FORCE roles to ADMIN + USER
             admin.setRoles(Set.of("ADMIN", "USER"));
 
-            // Default verification / flags
             admin.setGovIdVerificationStatus(User.VerificationStatus.VERIFIED);
             admin.setDisabled(false);
 
+            System.out.println("Before save roles = " + admin.getRoles());
             userRepo.save(admin);
+            System.out.println("After save roles = " + userRepo.findByPhone(adminPhone).get().getRoles());
 
-            System.out.println("✅ Ensured Admin user (phone: 919999999999, password: Admin@12345)");
+            System.out.println("🔥 ADMIN USER READY: phone=919999999999 pass=Admin@12345");
         };
     }
 }

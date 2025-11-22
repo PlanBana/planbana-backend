@@ -6,6 +6,8 @@ import com.planbana.backend.user.User.AdminNote;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import org.springframework.data.mongodb.core.mapping.Field;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
@@ -39,6 +41,7 @@ public class User extends BaseEntity {
   private boolean emailVerified = false;
   private boolean phoneVerified = false;
 
+  @Field("roles")
   private Set<String> roles = new HashSet<>();
   private List<String> languages = new ArrayList<>();
   private Set<String> hobbies = new HashSet<>();
