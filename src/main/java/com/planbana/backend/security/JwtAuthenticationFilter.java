@@ -13,6 +13,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.planbana.backend.user.User;
+import com.planbana.backend.user.UserRepository;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -22,9 +25,11 @@ import java.util.Locale;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtService jwtService;
+  private final UserRepository userRepo;
 
-  public JwtAuthenticationFilter(JwtService jwtService) {
+  public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepo) {
     this.jwtService = jwtService;
+    this.userRepo = userRepo;
   }
 
   @Override
@@ -75,45 +80,58 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   // }
 
   @Override
-  protected void doFilterInternal(HttpServletRequest request,
+  protected void doFilterInternal(
+      HttpServletRequest request,
       HttpServletResponse response,
       FilterChain filterChain) throws ServletException, IOException {
 
-    String uri = request.getRequestURI();
-    System.out.println("---- JWT FILTER ----");
-    System.out.println("Request: " + request.getMethod() + " " + uri);
-
     String token = resolveToken(request);
 
+    // 🔹 If no token → continue (public or unauthenticated request)
     if (token == null) {
-      System.out.println("No token found");
-    } else {
-      System.out.println("Token found: " + token.substring(0, 10) + "...");
-      System.out.println("Token roles (raw): " + jwtService.getRoles(token));
+      filterChain.doFilter(request, response);
+      return;
     }
 
-    if (token != null && jwtService.validateToken(token)) {
-      String username = jwtService.getUsername(token);
-      List<String> roles = jwtService.getRoles(token);
-
-      System.out.println("Valid token for: " + username);
-      System.out.println("Roles extracted: " + roles);
-
-      List<SimpleGrantedAuthority> authorities = roles.stream()
-          .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
-          .map(SimpleGrantedAuthority::new)
-          .toList();
-
-      System.out.println("Authorities applied: " + authorities);
-
-      UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(username, null,
-          authorities);
-
-      SecurityContextHolder.getContext().setAuthentication(authToken);
-    } else {
-      System.out.println("Token INVALID");
+    // 🔹 If token is invalid → continue (will be rejected later by security)
+    if (!jwtService.validateToken(token)) {
+      filterChain.doFilter(request, response);
+      return;
     }
 
+    // 🔹 Extract data from token
+    String phone = jwtService.getUsername(token);
+    Integer tokenTv = jwtService.getTokenVersion(token);
+
+    User user = userRepo.findByPhone(phone).orElse(null);
+
+    // 🔥 HARD BLOCK CHECK (logout from all devices)
+    if (user == null ||
+        Boolean.TRUE.equals(user.getDisabled()) ||
+        !user.getTokenVersion().equals(tokenTv)) {
+      response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+      response.setContentType("application/json");
+      response.getWriter().write("""
+            {
+              "error": "ACCOUNT_BLOCKED",
+              "message": "Your account has been blocked. Please contact the administrator."
+            }
+          """);
+      return; // ⛔ STOP FILTER CHAIN
+    }
+
+    // 🔹 User is valid → authenticate
+    List<SimpleGrantedAuthority> authorities = jwtService.getRoles(token)
+        .stream()
+        .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+        .map(SimpleGrantedAuthority::new)
+        .toList();
+
+    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(phone, null, authorities);
+
+    SecurityContextHolder.getContext().setAuthentication(authToken);
+
+    // 🔹 Continue request
     filterChain.doFilter(request, response);
   }
 

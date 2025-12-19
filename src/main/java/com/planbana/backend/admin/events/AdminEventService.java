@@ -123,4 +123,5 @@ public class AdminEventService {
 
         eventRepo.deleteById(id);
     }
+
 }

@@ -2,6 +2,7 @@ package com.planbana.backend.chat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.planbana.backend.admin.settings.MaintenanceGuard;
 import com.planbana.backend.user.User;
 import com.planbana.backend.user.UserRepository;
 import org.springframework.messaging.handler.annotation.*;
@@ -19,15 +20,19 @@ public class ChatSocketController {
     private final ChatRoomRepository chatRooms;
     private final UserRepository users;
 
+    private final MaintenanceGuard maintenanceGuard;
+
     public ChatSocketController(
             SimpMessagingTemplate template,
             MessageRepository messages,
             ChatRoomRepository chatRooms,
-            UserRepository users) {
+            UserRepository users,
+            MaintenanceGuard maintenanceGuard) {
         this.template = template;
         this.messages = messages;
         this.chatRooms = chatRooms;
         this.users = users;
+        this.maintenanceGuard = maintenanceGuard;
     }
 
     @MessageMapping("/chat/{eventId}")
@@ -36,6 +41,7 @@ public class ChatSocketController {
             @Payload MessagePayload payload,
             Authentication auth) {
 
+        maintenanceGuard.blockIfMaintenance(auth);
         System.out.println("📥 Received message for event " + eventId);
         System.out.println("📨 Payload: " + payload.getText());
         System.out.println("👤 Auth: " + (auth != null ? auth.getName() : "null"));

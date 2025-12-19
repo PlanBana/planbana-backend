@@ -77,6 +77,16 @@ public class User extends BaseEntity {
   private long ratingCount = 0L;
   private double ratingAverage = 0.0;
 
+  private Integer tokenVersion = 0;
+
+  public Integer getTokenVersion() {
+    return tokenVersion == null ? 0 : tokenVersion;
+  }
+
+  public void incrementTokenVersion() {
+    this.tokenVersion = getTokenVersion() + 1;
+  }
+
   // ---------- rating helpers ----------
   public void upsertRating(String raterUserId, int value) {
     if (raterUserId == null || raterUserId.isBlank())
@@ -466,6 +476,11 @@ public class User extends BaseEntity {
 
   public void setModeratorRegions(List<String> moderatorRegions) {
     this.moderatorRegions = moderatorRegions;
+  }
+
+  public boolean hasRole(String string) {
+    // TODO Auto-generated method stub
+    throw new UnsupportedOperationException("Unimplemented method 'hasRole'");
   }
 
 }

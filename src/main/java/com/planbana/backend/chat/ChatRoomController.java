@@ -1,5 +1,6 @@
 package com.planbana.backend.chat;
 
+import com.planbana.backend.admin.settings.MaintenanceGuard;
 import com.planbana.backend.events.Event;
 import com.planbana.backend.events.EventRepository;
 import com.planbana.backend.user.User;
@@ -26,16 +27,20 @@ public class ChatRoomController {
     private final UserRepository users;
     private final FileStorageService storage;
 
+    private final MaintenanceGuard maintenanceGuard;
+
     public ChatRoomController(ChatRoomRepository chatRooms,
             MessageRepository messages,
             EventRepository events,
             UserRepository users,
-            FileStorageService storage) {
+            FileStorageService storage,
+            MaintenanceGuard maintenanceGuard) {
         this.chatRooms = chatRooms;
         this.messages = messages;
         this.events = events;
         this.users = users;
         this.storage = storage;
+        this.maintenanceGuard = maintenanceGuard;
     }
 
     /**
@@ -43,6 +48,7 @@ public class ChatRoomController {
      */
     @PostMapping("/event/{eventId}")
     public ChatRoom createForEvent(@PathVariable String eventId, Authentication auth) {
+        maintenanceGuard.blockIfMaintenance(auth);
         Event event = events.findById(eventId).orElseThrow();
         User user = users.findByPhone(auth.getName()).orElseThrow();
 
@@ -84,6 +90,9 @@ public class ChatRoomController {
             @RequestParam(required = false) String title,
             @RequestParam(required = false) String bio,
             Authentication auth) {
+
+        maintenanceGuard.blockIfMaintenance(auth);
+
         ChatRoom room = chatRooms.findById(chatRoomId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
@@ -106,6 +115,8 @@ public class ChatRoomController {
     public ResponseEntity<Map<String, String>> uploadDp(@PathVariable String chatRoomId,
             @RequestParam("file") MultipartFile file,
             Authentication auth) throws IOException {
+
+        maintenanceGuard.blockIfMaintenance(auth);
         ChatRoom room = chatRooms.findById(chatRoomId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 

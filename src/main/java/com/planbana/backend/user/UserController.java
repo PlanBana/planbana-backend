@@ -12,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 
 import com.planbana.backend.audit.AuditLogger;
+import com.planbana.backend.admin.settings.MaintenanceGuard;
 import com.planbana.backend.audit.AuditAction;
 import com.planbana.backend.audit.AuditCategory;
 
@@ -27,13 +28,16 @@ public class UserController {
   private final UserRepository repo;
   private final FileStorageService storageService;
   private final AuditLogger auditLogger;
+  private final MaintenanceGuard maintenanceGuard;
 
   public UserController(UserRepository repo,
       FileStorageService storageService,
-      AuditLogger auditLogger) {
+      AuditLogger auditLogger,
+      MaintenanceGuard maintenanceGuard) {
     this.repo = repo;
     this.storageService = storageService;
     this.auditLogger = auditLogger;
+    this.maintenanceGuard = maintenanceGuard;
   }
 
   @GetMapping("/me")
@@ -65,6 +69,8 @@ public class UserController {
 
   @PatchMapping("/me")
   public Map<String, String> updateMe(@RequestBody UpdateMe req, Authentication auth) {
+
+    maintenanceGuard.blockIfMaintenance(auth);
     User u = repo.findByPhone(auth.getName())
         .or(() -> repo.findByEmail(auth.getName()))
         .orElseThrow();
@@ -118,6 +124,8 @@ public class UserController {
   @PostMapping("/me/avatar")
   public ResponseEntity<Map<String, String>> uploadAvatar(@RequestParam("file") MultipartFile file,
       Authentication auth) {
+
+    maintenanceGuard.blockIfMaintenance(auth);
     User u = repo.findByPhone(auth.getName())
         .or(() -> repo.findByEmail(auth.getName()))
         .orElseThrow();

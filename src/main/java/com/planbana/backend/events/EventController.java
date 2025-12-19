@@ -1,5 +1,8 @@
 package com.planbana.backend.events;
 
+import com.planbana.backend.admin.settings.MaintenanceGuard;
+import com.planbana.backend.admin.settings.SystemSettings;
+import com.planbana.backend.admin.settings.SystemSettingsService;
 import com.planbana.backend.audit.AuditAction;
 import com.planbana.backend.audit.AuditCategory;
 import com.planbana.backend.audit.AuditLog;
@@ -37,6 +40,9 @@ public class EventController {
   private final AuditLogger auditLogger;
   private final AuditLogRepository auditLogRepo;
 
+  private final MaintenanceGuard maintenanceGuard;
+  private final SystemSettingsService settingsService;
+
   private static final Logger logger = LoggerFactory.getLogger(EventController.class);
 
   public EventController(
@@ -45,13 +51,17 @@ public class EventController {
       UserRepository users,
       ChatRoomService chatService,
       AuditLogger auditLogger,
-      AuditLogRepository auditLogRepo) {
+      AuditLogRepository auditLogRepo,
+      MaintenanceGuard maintenanceGuard,
+      SystemSettingsService settingsService) {
     this.repo = repo;
     this.mongo = mongo;
     this.users = users;
     this.chatService = chatService;
     this.auditLogger = auditLogger;
     this.auditLogRepo = auditLogRepo;
+    this.maintenanceGuard = maintenanceGuard;
+    this.settingsService = settingsService;
   }
 
   // ============================================================
@@ -80,7 +90,18 @@ public class EventController {
 
   @PostMapping
   public Event create(@RequestBody CreateEvent req, Authentication auth) {
+    maintenanceGuard.blockIfMaintenance(auth);
+
     User u = getCurrentUser(auth);
+
+    SystemSettings settings = settingsService.get();
+    long count = repo.countByCreatedByUserId(u.getId());
+
+    if (count >= settings.getMaxEventsPerUser()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "EVENT_LIMIT_REACHED");
+    }
 
     Event e = new Event();
     e.setTitle(req.title);
@@ -155,6 +176,11 @@ public class EventController {
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String category,
       @RequestParam(required = false) Boolean showCanceled) {
+
+    SystemSettings settings = settingsService.get();
+    if (settings.isMaintenanceMode()) {
+      return List.of(); // ✅ UX decision A
+    }
 
     Query query = new Query();
 
@@ -419,9 +445,24 @@ public class EventController {
 
   @PostMapping("/{id}/join")
   public JoinStatusResponse requestJoin(@PathVariable String id, Authentication auth) {
+
+    maintenanceGuard.blockIfMaintenance(auth);
+
     User u = getCurrentUser(auth);
     Event e = repo.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
+    SystemSettings settings = settingsService.get();
+
+    int max = e.getMaxParticipants() != null
+        ? e.getMaxParticipants()
+        : settings.getMaxEventParticipants();
+
+    if (e.getParticipants().size() >= max) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST,
+          "EVENT_FULL");
+    }
 
     // Host auto approve
     if (Objects.equals(e.getCreatedByUserId(), u.getId())) {

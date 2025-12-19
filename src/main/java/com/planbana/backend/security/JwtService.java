@@ -8,6 +8,8 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import io.jsonwebtoken.Claims;
+
 import java.security.Key;
 import java.time.Instant;
 import java.util.Date;
@@ -31,21 +33,23 @@ public class JwtService {
     this.refreshDays = refreshDays;
   }
 
-  public String generateAccess(String subject, Set<String> roles) {
-    return generateAccess(subject, Map.of("roles", List.copyOf(roles)));
+  public String generateAccess(String subject, Set<String> roles, int tokenVersion) {
+    return generateAccess(subject, Map.of(
+        "roles", List.copyOf(roles),
+        "tv", tokenVersion));
   }
 
   public String generateAccess(String subject, Map<String, Object> claims) {
-  Instant now = Instant.now();
-  Instant exp = now.plusSeconds(accessMinutes * 60);
-  return Jwts.builder()
-      .setSubject(subject)
-      .setIssuedAt(Date.from(now))
-      .setExpiration(Date.from(exp))
-      .addClaims(claims)
-      .signWith(key, SignatureAlgorithm.HS256)
-      .compact();
-}
+    Instant now = Instant.now();
+    Instant exp = now.plusSeconds(accessMinutes * 60);
+    return Jwts.builder()
+        .setSubject(subject)
+        .setIssuedAt(Date.from(now))
+        .setExpiration(Date.from(exp))
+        .addClaims(claims)
+        .signWith(key, SignatureAlgorithm.HS256)
+        .compact();
+  }
 
   public String generateRefresh(String subject) {
     Instant now = Instant.now();
@@ -89,4 +93,24 @@ public class JwtService {
     }
     return List.of();
   }
+
+  public Integer getTokenVersion(String token) {
+    Claims claims = Jwts.parserBuilder()
+        .setSigningKey(key)
+        .build()
+        .parseClaimsJws(token)
+        .getBody();
+
+    Object tv = claims.get("tv");
+    if (tv == null) {
+      return 0; // backward compatibility
+    }
+
+    if (tv instanceof Number n) {
+      return n.intValue();
+    }
+
+    return Integer.parseInt(tv.toString());
+  }
+
 }

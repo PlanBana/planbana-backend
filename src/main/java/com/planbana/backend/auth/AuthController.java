@@ -154,7 +154,11 @@ public class AuthController {
           .map(r -> "ROLE_" + r) // standardize
           .collect(Collectors.toSet());
 
-      String access = jwt.generateAccess(u.getPhone(), jwtRoles);
+      String access = jwt.generateAccess(
+          u.getPhone(),
+          jwtRoles,
+          u.getTokenVersion());
+
       String refresh = jwt.generateRefresh(u.getPhone());
 
       Cookie cookie = new Cookie("access_token", access);
@@ -197,11 +201,19 @@ public class AuthController {
     }
 
     String username = jwt.getUsername(refresh);
-    List<String> roles = jwt.getRoles(refresh);
+    User user = users.findByPhone(username)
+        .orElseThrow(() -> new RuntimeException("User not found"));
+
+    Set<String> roles = user.getRoles().stream()
+        .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+        .collect(Collectors.toSet());
 
     return ResponseEntity.ok(Map.of(
-        "accessToken", jwt.generateAccess(username, Set.copyOf(roles)),
-        "refreshToken", jwt.generateRefresh(username)));
+        "accessToken", jwt.generateAccess(
+            user.getPhone(),
+            roles,
+            user.getTokenVersion()),
+        "refreshToken", jwt.generateRefresh(user.getPhone())));
   }
 
   // ---------------------------------------------------------
@@ -237,7 +249,10 @@ public class AuthController {
             null,
             Map.of("attempt", "login_attempt_on_disabled_account"));
 
-        return ResponseEntity.status(403).body(Map.of("error", "Account disabled"));
+        return ResponseEntity.status(403).body(Map.of(
+            "error", "ACCOUNT_BLOCKED",
+            "message", "Your account has been blocked. Please contact the administrator."));
+
       }
 
       if (!encoder.matches(req.password, u.getPasswordHash())) {
@@ -281,7 +296,11 @@ public class AuthController {
           .map(r -> "ROLE_" + r) // standardize
           .collect(Collectors.toSet());
 
-      String access = jwt.generateAccess(u.getPhone(), jwtRoles);
+      String access = jwt.generateAccess(
+          u.getPhone(),
+          jwtRoles,
+          u.getTokenVersion());
+
       String refresh = jwt.generateRefresh(u.getPhone());
 
       Cookie cookie = new Cookie("access_token", access);

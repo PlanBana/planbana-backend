@@ -57,6 +57,7 @@ public class SystemSettings {
         return maintenanceMode;
     }
 
+
     public void setMaintenanceMode(boolean maintenanceMode) {
         this.maintenanceMode = maintenanceMode;
     }
