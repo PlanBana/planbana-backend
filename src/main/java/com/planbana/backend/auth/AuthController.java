@@ -351,4 +351,40 @@ public class AuthController {
 
     return Map.of("message", "Logged out");
   }
+
+  // ---------------------------------------------------------
+  // 6️⃣ LOGIN STATUS CHECK And Quick logout for BLOCKED USERS
+  // ---------------------------------------------------------
+
+  @PostMapping("/login-status")
+  public ResponseEntity<?> loginStatus(@RequestBody AuthDtos.LoginStatusRequest req) {
+
+    String phone = normalizePhone(req.phone);
+    if (phone == null || phone.isBlank()) {
+      return ResponseEntity.badRequest().body(Map.of("status", "INVALID"));
+    }
+
+    Optional<User> userOpt = users.findByPhone(phone);
+
+    if (userOpt.isEmpty()) {
+      return ResponseEntity.ok(Map.of("status", "NOT_FOUND"));
+    }
+
+    User user = userOpt.get();
+
+    // 🚨 ADMIN IS NEVER BLOCKED
+    if (ADMIN_PHONE.equals(user.getPhone())) {
+      return ResponseEntity.ok(Map.of("status", "ACTIVE"));
+    }
+
+    // 🚫 BLOCKED USER
+    if (Boolean.TRUE.equals(user.getDisabled())) {
+      return ResponseEntity.status(403).body(Map.of(
+          "status", "BLOCKED",
+          "message", "Your account has been blocked. Please contact the administrator."));
+    }
+
+    return ResponseEntity.ok(Map.of("status", "ACTIVE"));
+  }
+
 }

@@ -46,4 +46,15 @@ public class AuthDtos {
     @Size(min = 8, max = 100)
     public String newPassword;
   }
+
+  // AuthDtos.java
+  public static class LoginStatusRequest {
+    public String phone;
+  }
+
+  public static class LoginStatusResponse {
+    public String status; // ACTIVE | BLOCKED | NOT_FOUND
+    public String message; // optional
+  }
+
 }
