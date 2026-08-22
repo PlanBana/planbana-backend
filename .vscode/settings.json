@@ -1,4 +1,12 @@
 {
     "java.configuration.updateBuildConfiguration": "interactive",
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-25",
+            "path": "C:\\Users\\HP\\AppData\\Local\\jdks\\jdk-25.0.2",
+            "default": true
+        }
+    ],
+    "java.home": "C:\\Users\\HP\\AppData\\Local\\jdks\\jdk-25.0.2"
 }
