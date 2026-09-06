@@ -1,11 +1,14 @@
 ## Steps to Run the Project
 
+
+mvn spring-boot:run 👈👈👈👈 command to run backend 
+
 1. __Prerequisites already satisfied on this machine:__
 
    - Java 21.0.8 ✅
    - Maven 3.9.4 ✅
 
-2. __Database__ — you have two options:
+2. __Database__ — you have two options: 👈👈👈👈
 
    - __Use the existing Atlas cloud MongoDB__ (already configured in `.env` via `MONGODB_URI`) — no extra setup needed, just ensure internet access and that the Atlas cluster allows your IP.
    - OR __run MongoDB locally__ with Docker (`docker-compose up -d mongo mongo-express`) if you install Docker Desktop, then uncomment the local `MONGODB_URI=mongodb://localhost:27017/planbana` line in `.env` and comment out the Atlas one.
@@ -18,7 +21,7 @@
 
    ```powershell
    cd "e:\Planbana Workspace\planbana-backend"
-   mvn spring-boot:run
+   mvn spring-boot:run 👈👈👈👈
    ```
 
    or build a jar and run it:

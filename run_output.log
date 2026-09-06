@@ -1,0 +1,171 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------------< com.planbana:backend >------------------------
+[INFO] Building planbana-backend 0.1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:3.4.13:run (default-cli) > test-compile @ backend >>>
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ backend ---
+[INFO] Copying 4 resources from src\main\resources to target\classes
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ backend ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 92 source files with javac [debug parameters release 21] to target\classes
+[INFO] Annotation processing is enabled because one or more processors were found
+  on the class path. A future release of javac may disable annotation processing
+  unless at least one processor is specified by name (-processor), or a search
+  path is specified (--processor-path, --processor-module-path), or annotation
+  processing is enabled explicitly (-proc:only, -proc:full).
+  Use -Xlint:-options to suppress this message.
+  Use -proc:none to disable annotation processing.
+[INFO] /E:/Planbana Workspace/planbana-backend/src/main/java/com/planbana/backend/config/RateLimitFilter.java: E:\Planbana Workspace\planbana-backend\src\main\java\com\planbana\backend\config\RateLimitFilter.java uses or overrides a deprecated API.
+[INFO] /E:/Planbana Workspace/planbana-backend/src/main/java/com/planbana/backend/config/RateLimitFilter.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ backend ---
+[INFO] skip non existing resourceDirectory E:\Planbana Workspace\planbana-backend\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ backend ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] <<< spring-boot:3.4.13:run (default-cli) < test-compile @ backend <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:3.4.13:run (default-cli) @ backend ---
+[INFO] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.4.13)
+
+2026-09-06T01:10:59.557+05:30  INFO 18872 --- [           main] c.planbana.backend.BackendApplication    : Starting BackendApplication using Java 21.0.8 with PID 18872 (E:\Planbana Workspace\planbana-backend\target\classes started by HP in E:\Planbana Workspace\planbana-backend)
+2026-09-06T01:10:59.561+05:30 DEBUG 18872 --- [           main] c.planbana.backend.BackendApplication    : Running with Spring Boot v3.4.13, Spring v6.2.15
+2026-09-06T01:10:59.562+05:30  INFO 18872 --- [           main] c.planbana.backend.BackendApplication    : The following 1 profile is active: "dev"
+2026-09-06T01:11:01.041+05:30  INFO 18872 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-06T01:11:01.044+05:30  INFO 18872 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data MongoDB repositories in DEFAULT mode.
+2026-09-06T01:11:01.247+05:30  INFO 18872 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 199 ms. Found 11 MongoDB repository interfaces.
+2026-09-06T01:11:01.263+05:30  INFO 18872 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-06T01:11:01.264+05:30  INFO 18872 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-09-06T01:11:01.280+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.admin.settings.SystemSettingsRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.281+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.audit.AuditLogRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.281+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.auth.PasswordResetTokenRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.282+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.auth.VerificationTokenRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.282+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.chat.ChatRoomRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.283+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.chat.MessageRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.284+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.destinations.DestinationRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.284+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.events.EventRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.285+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.events.share.ShareLinkRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.286+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.moderation.EventReportRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.286+05:30  INFO 18872 --- [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.planbana.backend.user.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-09-06T01:11:01.287+05:30  INFO 18872 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 13 ms. Found 0 Redis repository interfaces.
+2026-09-06T01:11:01.851+05:30  INFO 18872 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8085 (http)
+2026-09-06T01:11:01.858+05:30  INFO 18872 --- [           main] o.a.catalina.core.AprLifecycleListener   : An older version [1.2.38] of the Apache Tomcat Native library is installed, while Tomcat recommends a minimum version of [2.0.5]
+2026-09-06T01:11:01.858+05:30  INFO 18872 --- [           main] o.a.catalina.core.AprLifecycleListener   : Loaded Apache Tomcat Native library [1.2.38] using APR version [1.7.4].
+2026-09-06T01:11:01.860+05:30  INFO 18872 --- [           main] o.a.catalina.core.AprLifecycleListener   : OpenSSL successfully initialized [OpenSSL 1.1.1v  1 Aug 2023]
+2026-09-06T01:11:01.872+05:30  INFO 18872 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-06T01:11:01.872+05:30  INFO 18872 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
+2026-09-06T01:11:01.940+05:30  INFO 18872 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-09-06T01:11:01.941+05:30  INFO 18872 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2327 ms
+2026-09-06T01:11:02.258+05:30  INFO 18872 --- [           main] org.mongodb.driver.client                : MongoClient with metadata {"driver": {"name": "mongo-java-driver|sync|spring-boot", "version": "5.2.1"}, "os": {"type": "Windows", "name": "Windows 11", "architecture": "amd64", "version": "10.0"}, "platform": "Java/Oracle Corporation/21.0.8+12-LTS-250"} created with settings MongoClientSettings{readPreference=primary, writeConcern=WriteConcern{w=null, wTimeout=null ms, journal=null}, retryWrites=true, retryReads=true, readConcern=ReadConcern{level=null}, credential=null, transportSettings=null, commandListeners=[io.micrometer.core.instrument.binder.mongodb.MongoMetricsCommandListener@5d5574c7], codecRegistry=ProvidersCodecRegistry{codecProviders=[ValueCodecProvider{}, BsonValueCodecProvider{}, DBRefCodecProvider{}, DBObjectCodecProvider{}, DocumentCodecProvider{}, CollectionCodecProvider{}, IterableCodecProvider{}, MapCodecProvider{}, GeoJsonCodecProvider{}, GridFSFileCodecProvider{}, Jsr310CodecProvider{}, JsonObjectCodecProvider{}, BsonCodecProvider{}, EnumCodecProvider{}, com.mongodb.client.model.mql.ExpressionCodecProvider@5a7a6d34, com.mongodb.Jep395RecordCodecProvider@36871e98, com.mongodb.KotlinCodecProvider@70d687b8]}, loggerSettings=LoggerSettings{maxDocumentLength=1000}, clusterSettings={hosts=[localhost:27017], srvServiceName=mongodb, mode=SINGLE, requiredClusterType=UNKNOWN, requiredReplicaSetName='null', serverSelector='null', clusterListeners='[]', serverSelectionTimeout='30000 ms', localThreshold='15 ms'}, socketSettings=SocketSettings{connectTimeoutMS=10000, readTimeoutMS=0, receiveBufferSize=0, proxySettings=ProxySettings{host=null, port=null, username=null, password=null}}, heartbeatSocketSettings=SocketSettings{connectTimeoutMS=10000, readTimeoutMS=10000, receiveBufferSize=0, proxySettings=ProxySettings{host=null, port=null, username=null, password=null}}, connectionPoolSettings=ConnectionPoolSettings{maxSize=100, minSize=0, maxWaitTimeMS=120000, maxConnectionLifeTimeMS=0, maxConnectionIdleTimeMS=0, maintenanceInitialDelayMS=0, maintenanceFrequencyMS=60000, connectionPoolListeners=[io.micrometer.core.instrument.binder.mongodb.MongoMetricsConnectionPoolListener@6533629], maxConnecting=2}, serverSettings=ServerSettings{heartbeatFrequencyMS=10000, minHeartbeatFrequencyMS=500, serverMonitoringMode=AUTO, serverListeners='[]', serverMonitorListeners='[]'}, sslSettings=SslSettings{enabled=false, invalidHostNameAllowed=false, context=null}, applicationName='null', compressorList=[], uuidRepresentation=JAVA_LEGACY, serverApi=null, autoEncryptionSettings=null, dnsClient=null, inetAddressResolver=null, contextProvider=null, timeoutMS=null}
+2026-09-06T01:11:02.291+05:30  INFO 18872 --- [localhost:27017] org.mongodb.driver.cluster               : Monitor thread successfully connected to server with description ServerDescription{address=localhost:27017, type=STANDALONE, cryptd=false, state=CONNECTED, ok=true, minWireVersion=0, maxWireVersion=27, maxDocumentSize=16777216, logicalSessionTimeoutMinutes=30, roundTripTimeNanos=21702301, minRoundTripTimeNanos=0}
+2026-09-06T01:11:02.712+05:30 DEBUG 18872 --- [           main] c.p.b.security.JwtAuthenticationFilter   : Filter 'jwtAuthenticationFilter' configured for use
+2026-09-06T01:11:03.236+05:30 DEBUG 18872 --- [           main] o.s.w.s.s.s.WebSocketHandlerMapping      : Patterns [/ws] in 'stompWebSocketHandlerMapping'
+2026-09-06T01:11:03.826+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.a.AdminActivityFeedController:
+	
+2026-09-06T01:11:03.828+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.a.AdminAuditLogController:
+	
+2026-09-06T01:11:03.829+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.d.AdminDashboardController:
+	
+2026-09-06T01:11:03.829+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.e.AdminEventController:
+	
+2026-09-06T01:11:03.829+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.e.AdminEventModerationController:
+	
+2026-09-06T01:11:03.830+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.k.AdminKycController:
+	
+2026-09-06T01:11:03.830+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.r.AdminReportsController:
+	
+2026-09-06T01:11:03.831+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.s.AdminSystemSettingsController:
+	
+2026-09-06T01:11:03.831+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.s.PublicSystemSettingsController:
+	
+2026-09-06T01:11:03.832+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.u.AdminUserActionController:
+	
+2026-09-06T01:11:03.832+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.u.AdminUserController:
+	
+2026-09-06T01:11:03.833+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.a.AuthController:
+	
+2026-09-06T01:11:03.833+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.b.BuddyController:
+	
+2026-09-06T01:11:03.834+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.c.ChatRoomController:
+	
+2026-09-06T01:11:03.839+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.c.ChatSocketController:
+	{[MESSAGE],[/chat/{eventId}]}: sendMessage(String,MessagePayload,Authentication)
+2026-09-06T01:11:03.841+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.d.DestinationController:
+	
+2026-09-06T01:11:03.841+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.e.EventController:
+	
+2026-09-06T01:11:03.842+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.e.s.ShareLinkController:
+	
+2026-09-06T01:11:03.842+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.m.EventReportController:
+	
+2026-09-06T01:11:03.842+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	c.p.b.u.UserController:
+	
+2026-09-06T01:11:03.844+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	o.s.b.a.w.s.e.BasicErrorController:
+	
+2026-09-06T01:11:03.849+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	o.s.w.a.OpenApiWebMvcResource:
+	
+2026-09-06T01:11:03.850+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	o.s.w.u.SwaggerWelcomeWebMvc:
+	
+2026-09-06T01:11:03.851+05:30 DEBUG 18872 --- [           main] .WebSocketAnnotationMethodMessageHandler : 
+	o.s.w.u.SwaggerConfigResource:
+	
+2026-09-06T01:11:04.174+05:30  INFO 18872 --- [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name userDetailsServiceImpl
+2026-09-06T01:11:04.513+05:30  INFO 18872 --- [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-09-06T01:11:05.124+05:30 DEBUG 18872 --- [           main] o.s.m.s.ExecutorSubscribableChannel      : clientOutboundChannel added SubProtocolWebSocketHandler[StompSubProtocolHandler[v10.stomp, v11.stomp, v12.stomp]]
+2026-09-06T01:11:05.125+05:30 DEBUG 18872 --- [           main] o.s.m.s.ExecutorSubscribableChannel      : clientInboundChannel added WebSocketAnnotationMethodMessageHandler[prefixes=[/app/]]
+2026-09-06T01:11:05.125+05:30  INFO 18872 --- [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Starting...
+2026-09-06T01:11:05.126+05:30 DEBUG 18872 --- [           main] o.s.m.s.ExecutorSubscribableChannel      : clientInboundChannel added SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@b67b359]
+2026-09-06T01:11:05.126+05:30 DEBUG 18872 --- [           main] o.s.m.s.ExecutorSubscribableChannel      : brokerChannel added SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@b67b359]
+2026-09-06T01:11:05.127+05:30  INFO 18872 --- [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : BrokerAvailabilityEvent[available=true, SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@b67b359]]
+2026-09-06T01:11:05.128+05:30  INFO 18872 --- [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Started.
+2026-09-06T01:11:05.128+05:30 DEBUG 18872 --- [           main] o.s.m.s.ExecutorSubscribableChannel      : clientInboundChannel added UserDestinationMessageHandler[DefaultUserDestinationResolver[prefix=/user/]]
+2026-09-06T01:11:05.129+05:30 DEBUG 18872 --- [           main] o.s.m.s.ExecutorSubscribableChannel      : brokerChannel added UserDestinationMessageHandler[DefaultUserDestinationResolver[prefix=/user/]]
+2026-09-06T01:11:05.151+05:30  INFO 18872 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8085 (http) with context path '/'
+2026-09-06T01:11:05.171+05:30  INFO 18872 --- [           main] c.planbana.backend.BackendApplication    : Started BackendApplication in 6.161 seconds (process running for 6.573)
+Before save roles = [ADMIN, USER]
+After save roles = [ADMIN, USER]
+? ADMIN USER READY: phone=919999999999 pass=Admin@12345
+2026-09-06T01:11:06.438+05:30  INFO 18872 --- [nio-8085-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-06T01:11:06.438+05:30  INFO 18872 --- [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-09-06T01:11:06.439+05:30  INFO 18872 --- [nio-8085-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-09-06T01:12:05.121+05:30  INFO 18872 --- [MessageBroker-1] o.s.w.s.c.WebSocketMessageBrokerStats    : WebSocketSession[0 current WS(0)-HttpStream(0)-HttpPoll(0), 0 total, 0 closed abnormally (0 connect failure, 0 send limit, 0 transport error)], stompSubProtocol[processed CONNECT(0)-CONNECTED(0)-DISCONNECT(0)], stompBrokerRelay[null], inboundChannel[pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0], outboundChannel[pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0], sockJsScheduler[pool size = 1, active threads = 1, queued tasks = 0, completed tasks = 0]

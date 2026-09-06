@@ -172,8 +172,7 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.13.0</version>
         <configuration>
-          <!-- Compile class files for Java 21 to keep runtime tooling (ASM) compatible while running on JDK25 -->
-          <release>21</release>
+          <release>25</release>
         </configuration>
       </plugin>
       <plugin>

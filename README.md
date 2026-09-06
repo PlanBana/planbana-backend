@@ -3,6 +3,7 @@
 This project provides the backend for your Netlify-hosted frontend.
 
 ## Features
+
 - JWT auth (access + refresh) in httpOnly cookies
 - Email verification & password reset (SMTP configurable)
 - Users, Profiles, Events (with geo search), Destinations, Messages (1:1 chat via WebSocket/STOMP)
@@ -11,7 +12,8 @@ This project provides the backend for your Netlify-hosted frontend.
 - CORS set for local dev and Netlify
 
 ## Quick Start
-1. Ensure Java 21 and Maven are installed.
+
+1. Ensure Java 25 and Maven are installed.
 2. Start MongoDB locally or with Docker (`docker-compose up -d mongo mongo-express`).
 3. Configure `application.yml` (JWT secret, mail host, allowed origins).
 4. Run:
