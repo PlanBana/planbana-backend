@@ -1,13 +1,15 @@
 server:
-  port: 8081
+  port: 8085
 
 spring:
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/planbana}
+
   jackson:
     serialization:
       write-dates-as-timestamps: false
+
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
@@ -20,12 +22,38 @@ spring:
           starttls:
             enable: ${MAIL_STARTTLS:false}
 
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - openid
+              - profile
+              - email
+            redirect-uri: "{baseUrl}/login/oauth2/code/google"
+        provider:
+          google:
+            issuer-uri: https://accounts.google.com
+
 app:
+  # Base URL of the frontend used to build share/deeplinks (e.g. /i/{code} invite links).
+  publicBaseUrl: ${PUBLIC_BASE_URL:http://localhost:8080}
+
   frontend:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173,https://*.netlify.app}
+
   jwt:
-    secret: Xjw7qT0xK8eR1MvGpA2Nz4YxU9ZqJ5rT
-    access-token-minutes: 15
-    refresh-token-days: 7
+    secret: ${JWT_SECRET}
+    access-token-minutes: ${JWT_ACCESS_MINUTES:15}
+    refresh-token-days: ${JWT_REFRESH_DAYS:7}
+
   rateLimit:
-    requestsPerMinute: 100
+    requestsPerMinute: ${RATE_LIMIT_RPM:100}
+  bootstrap-admin-phone: ${BOOTSTRAP_ADMIN_PHONE:}
+
+# Firebase service account will be loaded from classpath
+firebase:
+  service-account: "firebase-service-account.json"

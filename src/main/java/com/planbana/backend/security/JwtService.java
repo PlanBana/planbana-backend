@@ -8,10 +8,14 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import io.jsonwebtoken.Claims;
+
 import java.security.Key;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class JwtService {
@@ -24,9 +28,15 @@ public class JwtService {
       @Value("${app.jwt.secret}") String secret,
       @Value("${app.jwt.access-token-minutes}") long accessMinutes,
       @Value("${app.jwt.refresh-token-days}") long refreshDays) {
-    this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(java.util.Base64.getEncoder().encodeToString(secret.getBytes())));
+    this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
     this.accessMinutes = accessMinutes;
     this.refreshDays = refreshDays;
+  }
+
+  public String generateAccess(String subject, Set<String> roles, int tokenVersion) {
+    return generateAccess(subject, Map.of(
+        "roles", List.copyOf(roles),
+        "tv", tokenVersion));
   }
 
   public String generateAccess(String subject, Map<String, Object> claims) {
@@ -62,7 +72,45 @@ public class JwtService {
   }
 
   public String getUsername(String token) {
-    Claims claims = Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+    Claims claims = Jwts.parserBuilder()
+        .setSigningKey(key)
+        .build()
+        .parseClaimsJws(token)
+        .getBody();
     return claims.getSubject();
   }
+
+  @SuppressWarnings("unchecked")
+  public List<String> getRoles(String token) {
+    Claims claims = Jwts.parserBuilder()
+        .setSigningKey(key)
+        .build()
+        .parseClaimsJws(token)
+        .getBody();
+    Object roles = claims.get("roles");
+    if (roles instanceof List<?> list) {
+      return list.stream().map(Object::toString).toList();
+    }
+    return List.of();
+  }
+
+  public Integer getTokenVersion(String token) {
+    Claims claims = Jwts.parserBuilder()
+        .setSigningKey(key)
+        .build()
+        .parseClaimsJws(token)
+        .getBody();
+
+    Object tv = claims.get("tv");
+    if (tv == null) {
+      return 0; // backward compatibility
+    }
+
+    if (tv instanceof Number n) {
+      return n.intValue();
+    }
+
+    return Integer.parseInt(tv.toString());
+  }
+
 }

@@ -43,8 +43,15 @@ public class RateLimitFilter implements Filter {
     if (bucket.tryConsume(1)) {
       chain.doFilter(request, response);
     } else {
+      // Add CORS headers so the browser can read the error (otherwise it sees "Failed to fetch")
+      String origin = req.getHeader("Origin");
+      if (origin != null && (origin.equals("http://localhost:3000") || origin.equals("http://127.0.0.1:3000"))) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      }
       res.setStatus(429);
-      res.getWriter().write("Too Many Requests");
+      res.setContentType("application/json");
+      res.getWriter().write("{\"error\":\"RATE_LIMITED\",\"message\":\"Too Many Requests. Please try again later.\"}");
     }
   }
 }
