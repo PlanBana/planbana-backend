@@ -14,18 +14,17 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.1</version>
+    <version>3.4.13</version>
     <relativePath/>
   </parent>
 
   <properties>
     <java.version>21</java.version>
     <jjwt.version>0.11.5</jjwt.version>
-    <springdoc.version>2.5.0</springdoc.version>
+    <springdoc.version>2.7.0</springdoc.version>
     <bucket4j.version>8.3.0</bucket4j.version>
   </properties>
 
-  <!-- Keep Mongock modules in sync -->
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -39,7 +38,7 @@
   </dependencyManagement>
 
   <dependencies>
-    <!-- Spring core -->
+    <!-- Spring Core -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
@@ -48,6 +47,13 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
+
+    <dependency>
+  <groupId>io.github.cdimascio</groupId>
+  <artifactId>dotenv-java</artifactId>
+  <version>3.0.0</version>
+</dependency>
+
 
     <!-- MongoDB -->
     <dependency>
@@ -103,7 +109,7 @@
       <version>${springdoc.version}</version>
     </dependency>
 
-    <!-- Mongock (Runner + Driver + API Annotations) -->
+    <!-- Mongock -->
     <dependency>
       <groupId>io.mongock</groupId>
       <artifactId>mongock-springboot</artifactId>
@@ -117,12 +123,6 @@
       <artifactId>mongock-api</artifactId>
     </dependency>
 
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-
-
     <!-- Rate limiting -->
     <dependency>
       <groupId>com.bucket4j</groupId>
@@ -130,22 +130,56 @@
       <version>${bucket4j.version}</version>
     </dependency>
 
+    <!-- TEST DEPENDENCIES -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+
+
     <!-- Actuator -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
-    <!-- Testing -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
+  <dependency>
+    <groupId>com.google.firebase</groupId>
+    <artifactId>firebase-admin</artifactId>
+    <version>9.2.0</version>
+  </dependency>
+
+  <!-- spring-security oauth2 client -->
+  <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-oauth2-client</artifactId>
+  </dependency>
+
+  <!-- Redis -->
+  <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+  </dependency>
+
   </dependencies>
+
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>21</release>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
